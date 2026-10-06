@@ -4,10 +4,8 @@ from valska import evidence as compatibility_evidence
 from valska import plotting as compatibility_plotting
 from valska import utils as compatibility_utils
 from valska.external_tools.bayeseor import (
-    analysis_plot,
     chain_utils,
     evidence,
-    native_plotting,
     plotting,
 )
 
@@ -24,16 +22,6 @@ def test_top_level_plotting_imports_relocated_api() -> None:
     assert (
         compatibility_plotting.BeamAnalysisPlotter
         is plotting.BeamAnalysisPlotter
-    )
-
-
-def test_analysis_plot_imports_native_plotting_api() -> None:
-    assert (
-        analysis_plot.BayesEoRPlotConfig is native_plotting.BayesEoRPlotConfig
-    )
-    assert (
-        analysis_plot.plot_bayeseor_power_spectra_and_posteriors
-        is native_plotting.plot_bayeseor_power_spectra_and_posteriors
     )
 
 
