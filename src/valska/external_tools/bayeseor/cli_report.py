@@ -19,9 +19,6 @@ from valska.cli_format import (
     resolve_progress_mode,
     show_progress,
 )
-from valska.external_tools.bayeseor.native_plotting import (
-    BayesEoRPlotConfig,
-)
 from valska.external_tools.bayeseor.plot_configs import (
     resolve_analysis_plot_config_path,
 )
@@ -30,6 +27,9 @@ from valska.external_tools.bayeseor.report import (
     SweepReportResult,
     export_report_artefacts,
     generate_sweep_report,
+)
+from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
+    BayesEoRPlotConfig,
 )
 
 _TableStyle = str

@@ -1,4 +1,4 @@
-"""Unit tests for plotting"""
+"""Unit tests for plotting delegated directly to BayesEoR."""
 
 import tempfile
 from pathlib import Path
@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy
 import pytest
 
-from valska.external_tools.bayeseor import plotting
+from valska.external_tools.bayeseor import bayeseor_direct_plotting
 
 from .constants import (
     # CHAINS_DIR,
@@ -27,7 +27,7 @@ def test_create_beam_plotter_with_paths_file(path_manager):
         )
         yaml_file.seek(0)
 
-        beam_analysis_plotter = plotting.BeamAnalysisPlotter(
+        beam_analysis_plotter = bayeseor_direct_plotting.BeamAnalysisPlotter(
             base_chains_dir=path_manager.chains_dir,
             paths_file=yaml_file.name,
         )
@@ -46,7 +46,7 @@ def test_create_beam_plotter_with_paths_dict(path_manager):
         "Test2": "test/directory2/",
     }
 
-    beam_analysis_plotter = plotting.BeamAnalysisPlotter(
+    beam_analysis_plotter = bayeseor_direct_plotting.BeamAnalysisPlotter(
         base_chains_dir=path_manager.chains_dir,
         paths=paths,
     )
@@ -105,7 +105,8 @@ def test_add_analysis_path(beam_analysis):
     ],
 )
 @patch(
-    "valska.external_tools.bayeseor.plotting.DataContainer", MockDataContainer
+    "valska.external_tools.bayeseor.bayeseor_direct_plotting.DataContainer",
+    MockDataContainer,
 )
 def test_get_data_container(
     beam_analysis, analysis_keys, labels, expected_ps, expected_results
@@ -212,7 +213,8 @@ def test_get_data_container(
     ],
 )
 @patch(
-    "valska.external_tools.bayeseor.plotting.DataContainer", MockDataContainer
+    "valska.external_tools.bayeseor.bayeseor_direct_plotting.DataContainer",
+    MockDataContainer,
 )
 def test_plot_analysis_results(beam_analysis, input_args, expected_results):
     """
@@ -352,7 +354,8 @@ def test_plot_analysis_results(beam_analysis, input_args, expected_results):
     ],
 )
 @patch(
-    "valska.external_tools.bayeseor.plotting.DataContainer", MockDataContainer
+    "valska.external_tools.bayeseor.bayeseor_direct_plotting.DataContainer",
+    MockDataContainer,
 )
 def test_create_comparison_plot(beam_analysis, input_args, expected_results):
     """
@@ -379,7 +382,8 @@ def test_create_comparison_plot(beam_analysis, input_args, expected_results):
 
 
 @patch(
-    "valska.external_tools.bayeseor.plotting.DataContainer", MockDataContainer
+    "valska.external_tools.bayeseor.bayeseor_direct_plotting.DataContainer",
+    MockDataContainer,
 )
 def test_plot_gleam_analysis(path_manager):
     """
@@ -389,7 +393,10 @@ def test_plot_gleam_analysis(path_manager):
     GLEAM analysis
     """
 
-    fig = cast(Any, plotting.plot_gleam_analysis(path_manager.chains_dir))
+    fig = cast(
+        Any,
+        bayeseor_direct_plotting.plot_gleam_analysis(path_manager.chains_dir),
+    )
 
     expected_title = (
         "UKSRC validation: Burba et al. 2023, Case 1. \n"
@@ -406,7 +413,8 @@ def test_plot_gleam_analysis(path_manager):
 
 
 @patch(
-    "valska.external_tools.bayeseor.plotting.DataContainer", MockDataContainer
+    "valska.external_tools.bayeseor.bayeseor_direct_plotting.DataContainer",
+    MockDataContainer,
 )
 def test_plot_gsm_comparison(path_manager):
     """
@@ -416,7 +424,10 @@ def test_plot_gsm_comparison(path_manager):
     GSM foreground analysis
     """
 
-    fig = cast(Any, plotting.plot_gsm_comparison(path_manager.chains_dir))
+    fig = cast(
+        Any,
+        bayeseor_direct_plotting.plot_gsm_comparison(path_manager.chains_dir),
+    )
 
     assert (
         fig.suptitle

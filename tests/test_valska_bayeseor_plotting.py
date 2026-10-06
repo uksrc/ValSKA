@@ -8,7 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from valska.external_tools.bayeseor.native_plotting import (
+from valska.external_tools.bayeseor.plot_configs import (
+    get_default_analysis_plot_config_path,
+    resolve_analysis_plot_config_path,
+)
+from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
     BayesEoRPlotConfig,
     _format_perturbation_label,
     _prior_groups,
@@ -17,10 +21,6 @@ from valska.external_tools.bayeseor.native_plotting import (
     plot_bayeseor_power_spectra_and_posteriors,
     ps_to_dmps,
     weighted_quantiles,
-)
-from valska.external_tools.bayeseor.plot_configs import (
-    get_default_analysis_plot_config_path,
-    resolve_analysis_plot_config_path,
 )
 
 pytest.importorskip("bayeseor")

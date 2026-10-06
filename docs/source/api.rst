@@ -13,8 +13,8 @@ deprecated compatibility shim for downstream users migrating existing code.
    valska.external_tools.bayeseor.chain_utils
    valska.external_tools.bayeseor.evidence
    valska.notebook_helpers
-   valska.external_tools.bayeseor.plotting
-   valska.external_tools.bayeseor.native_plotting
+   valska.external_tools.bayeseor.bayeseor_direct_plotting
+   valska.external_tools.bayeseor.valska_bayeseor_plotting
    valska.utils
 
    valska.external_tools

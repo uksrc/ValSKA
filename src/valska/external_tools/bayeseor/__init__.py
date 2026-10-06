@@ -14,17 +14,17 @@ from .chain_utils import (
     filter_chain_pairs_absolute_range,
 )
 from .constants import TOOL_NAME
-from .native_plotting import (
-    BayesEoRPlotConfig,
-    load_bayeseor_analysis_outputs,
-    plot_bayeseor_power_spectra_and_posteriors,
-)
 from .report import generate_sweep_report
 from .runner import BayesEoRInstall, CondaRunner, ContainerRunner
 from .setup import prepare_bayeseor_run
 from .submit import SubmissionError, submit_bayeseor_run
 from .sweep_health import inspect_sweep_health
 from .templates import get_template_path, list_templates
+from .valska_bayeseor_plotting import (
+    BayesEoRPlotConfig,
+    load_bayeseor_analysis_outputs,
+    plot_bayeseor_power_spectra_and_posteriors,
+)
 
 __all__ = [
     "prepare_bayeseor_run",

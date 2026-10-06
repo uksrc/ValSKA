@@ -20,9 +20,9 @@ from valska.cli_format import (
 from valska.utils import get_default_path_manager
 
 from .cli_list_sweeps import discover_sweeps
-from .native_plotting import BayesEoRPlotConfig
 from .plot_configs import resolve_analysis_plot_config_path
 from .report import SweepReportResult, generate_sweep_report
+from .valska_bayeseor_plotting import BayesEoRPlotConfig
 
 
 def _apply_filters(

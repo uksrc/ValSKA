@@ -3,7 +3,9 @@ from pathlib import Path
 import pytest
 
 from tests.test_pyuvsim_slurm import _render_script
-from valska.external_tools.bayeseor.plotting import BeamAnalysisPlotter
+from valska.external_tools.bayeseor.bayeseor_direct_plotting import (
+    BeamAnalysisPlotter,
+)
 from valska.utils import PathManager
 
 from .constants import EOR_PS, NOISE_RATIO

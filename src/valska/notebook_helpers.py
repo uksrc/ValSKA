@@ -13,12 +13,15 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from IPython.display import HTML, display
 
+from valska.external_tools.bayeseor.bayeseor_direct_plotting import (
+    BeamAnalysisPlotter,
+)
+
 from .evidence import (
     ChainPair,
     calculate_bayes_factor,
     run_complete_bayeseor_analysis,
 )
-from .plotting import BeamAnalysisPlotter
 
 
 def extract_airy_point_bayes_factors(

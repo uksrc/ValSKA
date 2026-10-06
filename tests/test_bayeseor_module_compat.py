@@ -1,12 +1,15 @@
 """Compatibility tests for relocated BayesEoR modules."""
 
+import importlib
+import warnings
+
 from valska import evidence as compatibility_evidence
 from valska import plotting as compatibility_plotting
 from valska import utils as compatibility_utils
 from valska.external_tools.bayeseor import (
+    bayeseor_direct_plotting,
     chain_utils,
     evidence,
-    plotting,
 )
 
 
@@ -21,7 +24,18 @@ def test_top_level_evidence_imports_relocated_api() -> None:
 def test_top_level_plotting_imports_relocated_api() -> None:
     assert (
         compatibility_plotting.BeamAnalysisPlotter
-        is plotting.BeamAnalysisPlotter
+        is bayeseor_direct_plotting.BeamAnalysisPlotter
+    )
+
+
+def test_legacy_package_plotting_imports_relocated_api() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        legacy_plotting = importlib.import_module("valska_hera_beam.plotting")
+
+    assert (
+        legacy_plotting.BeamAnalysisPlotter
+        is bayeseor_direct_plotting.BeamAnalysisPlotter
     )
 
 

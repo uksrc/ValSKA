@@ -1,4 +1,11 @@
-"""BayesEoR-delegated plotting helpers for ValSKA analysis outputs."""
+"""Plotting that delegates directly to BayesEoR's ``DataContainer``.
+
+This module wraps :class:`bayeseor.analyze.analyze.DataContainer`, so BayesEoR
+itself reads the chains, computes the posterior summaries and renders the
+figures. For ValSKA's own reader, posterior calculations and renderer for
+BayesEoR outputs, see
+:mod:`valska.external_tools.bayeseor.valska_bayeseor_plotting`.
+"""
 
 from pathlib import Path
 from typing import Any

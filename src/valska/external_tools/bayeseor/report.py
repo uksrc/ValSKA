@@ -25,16 +25,18 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from valska.external_tools.bayeseor.bayeseor_direct_plotting import (
+    BeamAnalysisPlotter,
+)
 from valska.external_tools.bayeseor.evidence import (
     ChainPair,
     run_complete_bayeseor_analysis,
 )
-from valska.external_tools.bayeseor.native_plotting import (
+from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
     BayesEoRPlotConfig,
     load_bayeseor_analysis_outputs,
     plot_bayeseor_power_spectra_and_posteriors,
 )
-from valska.external_tools.bayeseor.plotting import BeamAnalysisPlotter
 
 _EVIDENCE_LINE_RE = re.compile(
     r"^Nested (?P<mode>Sampling|Importance Sampling) Global Log-Evidence\s*:\s*"

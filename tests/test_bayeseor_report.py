@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 
 from valska.external_tools.bayeseor import cli_report, evidence
-from valska.external_tools.bayeseor.native_plotting import (
-    BayesEoRPlotConfig,
-)
 from valska.external_tools.bayeseor.report import (
     _plot_config_for_hypothesis,
     export_report_artefacts,
     generate_sweep_report,
     parse_data_stats_evidence,
+)
+from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
+    BayesEoRPlotConfig,
 )
 
 from .constants import mock_read_chains

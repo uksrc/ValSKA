@@ -1,4 +1,9 @@
-"""ValSKA-native BayesEoR analysis-data loading and figure rendering.
+"""ValSKA-owned plotting of BayesEoR outputs.
+
+This module reads BayesEoR output directories, computes the posterior
+summaries used for plotting and renders the figures within ValSKA. It does not
+call BayesEoR's ``DataContainer``; for plotting delegated directly to
+BayesEoR, see :mod:`valska.external_tools.bayeseor.bayeseor_direct_plotting`.
 
 The chain-reading/statistics and default combined figure layout in this module
 are derived from BayesEoR's BSD 3-Clause licensed
