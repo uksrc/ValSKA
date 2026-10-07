@@ -1,0 +1,59 @@
+{
+  "created_utc": "2026-07-16T11:50:22.882199+00:00",
+  "sweep_dir": "sweep_airy_v3",
+  "report_dir": "report",
+  "assets_dir": ".",
+  "evidence_source": "ins",
+  "rows_total": 11,
+  "rows_complete": 11,
+  "artefacts": [
+    {
+      "role": "sweep_summary_csv",
+      "name": "sweep_report_summary.csv",
+      "source_path": "report/sweep_report_summary.csv",
+      "copied_path": "sweep_report_summary.csv"
+    },
+    {
+      "role": "sweep_summary_json",
+      "name": "sweep_report_summary.json",
+      "source_path": "report/sweep_report_summary.json",
+      "copied_path": "sweep_report_summary.json"
+    },
+    {
+      "role": "delta_log_evidence_plot",
+      "name": "delta_log_evidence_vs_perturb_frac.png",
+      "source_path": "report/delta_log_evidence_vs_perturb_frac.png",
+      "copied_path": "delta_log_evidence_vs_perturb_frac.png"
+    },
+    {
+      "role": "log_evidence_by_model_plot",
+      "name": "log_evidence_by_model_vs_perturb_frac.png",
+      "source_path": "report/log_evidence_by_model_vs_perturb_frac.png",
+      "copied_path": "log_evidence_by_model_vs_perturb_frac.png"
+    },
+    {
+      "role": "legacy_analysis_plot",
+      "name": "plot_analysis_results_signal_fit.png",
+      "source_path": "report/plot_analysis_results_signal_fit.png",
+      "copied_path": "plot_analysis_results_signal_fit.png"
+    },
+    {
+      "role": "valska_analysis_plot",
+      "name": "plot_analysis_results_signal_fit_valska.png",
+      "source_path": "report/plot_analysis_results_signal_fit_valska.png",
+      "copied_path": "plot_analysis_results_signal_fit_valska.png"
+    },
+    {
+      "role": "complete_analysis_json",
+      "name": "complete_analysis_results.json",
+      "source_path": "report/complete_analysis_results.json",
+      "copied_path": "complete_analysis_results.json"
+    },
+    {
+      "role": "complete_analysis_csv",
+      "name": "complete_analysis_successful.csv",
+      "source_path": "report/complete_analysis_successful.csv",
+      "copied_path": "complete_analysis_successful.csv"
+    }
+  ]
+}

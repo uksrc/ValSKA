@@ -131,6 +131,80 @@ def test_load_runtime_paths_site_packages_cwd_fallback(tmp_path, monkeypatch):
     assert bayeseor_cfg["repo_path"] == "/tmp/cwd_bayeseor"
 
 
+def test_resolve_data_path_named_root(tmp_path):
+    """Relative dataset paths can resolve against a named data root."""
+
+    runtime_paths = {
+        "data": {
+            "root": str(tmp_path / "default"),
+            "named_roots": {"gaussian": str(tmp_path / "gaussian")},
+        }
+    }
+
+    resolved = utils.resolve_data_path_info(
+        "input.uvh5", runtime_paths, data_root_key="gaussian"
+    )
+
+    assert resolved.path == (tmp_path / "gaussian" / "input.uvh5").resolve()
+    assert resolved.source == "runtime_paths.yaml:data.named_roots.gaussian"
+    assert resolved.data_root_key == "gaussian"
+
+
+def test_resolve_data_path_named_default_root(tmp_path):
+    """Relative dataset paths prefer named_roots.default when no key is passed."""
+
+    runtime_paths = {
+        "data": {
+            "root": str(tmp_path / "legacy-default"),
+            "named_roots": {"default": str(tmp_path / "named-default")},
+        }
+    }
+
+    resolved = utils.resolve_data_path_info("input.uvh5", runtime_paths)
+
+    assert (
+        resolved.path == (tmp_path / "named-default" / "input.uvh5").resolve()
+    )
+    assert resolved.source == "runtime_paths.yaml:data.named_roots.default"
+    assert resolved.data_root_key == "default"
+
+
+def test_resolve_data_path_legacy_root_fallback(tmp_path):
+    """Legacy data.root is still used when named_roots.default is absent."""
+
+    runtime_paths = {"data": {"root": str(tmp_path / "legacy-default")}}
+
+    resolved = utils.resolve_data_path_info("input.uvh5", runtime_paths)
+
+    assert (
+        resolved.path == (tmp_path / "legacy-default" / "input.uvh5").resolve()
+    )
+    assert resolved.source == "runtime_paths.yaml:data.root"
+    assert resolved.data_root_key is None
+
+
+def test_resolve_data_path_missing_named_root_lists_available(tmp_path):
+    """Missing named data roots fail with available keys in the message."""
+
+    runtime_paths = {
+        "data": {
+            "named_roots": {
+                "airy_diam14m": str(tmp_path / "airy"),
+                "gaussian": str(tmp_path / "gaussian"),
+            }
+        }
+    }
+
+    with pytest.raises(ValueError) as excinfo:
+        utils.resolve_data_path_info(
+            "input.uvh5", runtime_paths, data_root_key="missing"
+        )
+
+    msg = str(excinfo.value)
+    assert "data root key 'missing' not found" in msg
+    assert "airy_diam14m, gaussian" in msg
+
+
 def test_path_manager_get_paths(path_manager):
     """
     Test PathManager get_paths method

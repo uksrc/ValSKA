@@ -9,6 +9,11 @@ import numpy
 from scipy.constants import c as speed_of_light
 from scipy.special import j1
 
+from valska.constants import (
+    DEFAULT_EOR_POWER_MK2_MPC3,
+    DEFAULT_NOISE_TO_EOR_POWER_RATIO,
+)
+
 # Use an ephemeral, writable temp directory for tests (not checked into VCS)
 BASE_DIR = Path(tempfile.mkdtemp(prefix="valska_tests_")).resolve()
 CHAINS_DIR = BASE_DIR / "chains"
@@ -19,8 +24,8 @@ RESULTS_DIR = BASE_DIR / "results"
 for d in (CHAINS_DIR, DATA_DIR, RESULTS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-EOR_PS = 214777.66068216303  # mK^2 Mpc^3
-NOISE_RATIO = 0.5
+EOR_PS = DEFAULT_EOR_POWER_MK2_MPC3
+NOISE_RATIO = DEFAULT_NOISE_TO_EOR_POWER_RATIO
 
 
 class MockDataContainer:

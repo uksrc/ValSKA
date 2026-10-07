@@ -5,15 +5,15 @@ This module provides:
 - Path management via :class:`PathManager`
 - Loading of analysis paths from ``config/paths.yaml``
 - Loading of site/user runtime paths from ``config/runtime_paths.yaml``
-- Helpers to build perturbation groups and readable labels
-- Simple filtering helpers for perturbation keys
+- Compatibility wrappers for BayesEoR perturbation helpers
 
 Notes on runtime_paths.yaml
 ---------------------------
 `config/runtime_paths.yaml` is intended for *site/user-specific* settings, e.g.
 
 - results_root (where all ValSKA outputs go)
-- data.root (a default root for input datasets; used to resolve relative --data paths)
+- data.named_roots.default (preferred default root for input datasets)
+- data.root (legacy default root for input datasets)
 - BayesEoR repo_path / conda_sh / conda_env defaults
 - Other external tool paths (pyuvsim, OSKAR) in future
 """
@@ -22,24 +22,27 @@ from __future__ import annotations
 
 import inspect
 import os
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml  # type: ignore[import-untyped]
 
-# =============================================================================
-# TYPE ALIASES
-# =============================================================================
-
 PathLike = str | Path
-PairsMap = Mapping[str, object]  # generic mapping of key -> value
-MutablePairsMap = MutableMapping[str, object]
 
 
 # =============================================================================
 # RUNTIME PATHS YAML (SITE/USER CONFIG)
 # =============================================================================
+
+
+class ResolvedDataPath(NamedTuple):
+    """Resolved dataset path plus provenance for CLI output/manifests."""
+
+    path: Path
+    source: str
+    data_root_key: str | None
 
 
 def load_runtime_paths(
@@ -49,7 +52,7 @@ def load_runtime_paths(
     """Load site/user runtime paths from ``config/runtime_paths.yaml`` if present.
 
     This configuration is intended for site/user-specific settings such as
-    ``results_root``, ``data.root``, and default external-tool paths.
+    ``results_root``, ``data.named_roots``, and default external-tool paths.
 
     Parameters
     ----------
@@ -121,13 +124,18 @@ def load_runtime_paths(
 def resolve_data_path(
     data_path: PathLike,
     runtime_paths: Mapping[str, object] | None = None,
+    data_root_key: str | None = None,
 ) -> Path:
     """Resolve an input dataset path using runtime_paths.yaml defaults.
 
     Rules
     -----
     - If `data_path` is absolute: return it (expanded + resolved).
-    - If `data_path` is relative and runtime_paths contains `data.root`:
+    - If `data_path` is relative and `data_root_key` is provided:
+        return `<data.named_roots[data_root_key]>/<data_path>` (expanded + resolved).
+    - If `data_path` is relative and runtime_paths contains `data.named_roots.default`:
+        return `<data.named_roots.default>/<data_path>` (expanded + resolved).
+    - If `data_path` is relative and runtime_paths contains legacy `data.root`:
         return `<data.root>/<data_path>` (expanded + resolved).
     - Otherwise: resolve relative to the current working directory.
 
@@ -140,25 +148,82 @@ def resolve_data_path(
         Dataset path provided by a user/CLI.
     runtime_paths
         Parsed runtime paths mapping (typically from `load_runtime_paths()`).
+    data_root_key
+        Optional key in ``runtime_paths.yaml:data.named_roots`` to use for
+        relative input paths.
 
     Returns
     -------
     Path
         Fully resolved absolute path.
     """
+    return resolve_data_path_info(
+        data_path, runtime_paths, data_root_key=data_root_key
+    ).path
+
+
+def resolve_data_path_info(
+    data_path: PathLike,
+    runtime_paths: Mapping[str, object] | None = None,
+    data_root_key: str | None = None,
+) -> ResolvedDataPath:
+    """Resolve an input dataset path and report where it came from."""
     p = Path(data_path).expanduser()
 
     if p.is_absolute():
-        return p.resolve()
+        return ResolvedDataPath(
+            path=p.resolve(), source="CLI", data_root_key=None
+        )
 
     rt = runtime_paths or {}
     data_cfg = rt.get("data") if isinstance(rt, Mapping) else None
     if isinstance(data_cfg, Mapping):
+        key = (data_root_key or "").strip()
+        named_roots = data_cfg.get("named_roots")
+        if key or isinstance(named_roots, Mapping):
+            roots = named_roots
+            available = (
+                sorted(str(k) for k in roots.keys())
+                if isinstance(roots, Mapping)
+                else []
+            )
+            selected_key = key or "default"
+            if not isinstance(roots, Mapping) or selected_key not in roots:
+                if key:
+                    if available:
+                        available_msg = ", ".join(available)
+                    else:
+                        available_msg = "(none configured)"
+                    raise ValueError(
+                        "ERROR: data root key "
+                        f"'{key}' not found in "
+                        "runtime_paths.yaml:data.named_roots. "
+                        f"Available keys: {available_msg}"
+                    )
+            else:
+                root = roots[selected_key]
+                if not isinstance(root, str) or not root.strip():
+                    raise ValueError(
+                        "ERROR: runtime_paths.yaml:data.named_roots."
+                        f"{selected_key} must be a non-empty path string."
+                    )
+                return ResolvedDataPath(
+                    path=(Path(root).expanduser() / p).resolve(),
+                    source=(
+                        f"runtime_paths.yaml:data.named_roots.{selected_key}"
+                    ),
+                    data_root_key=selected_key,
+                )
+
         root = data_cfg.get("root")
         if isinstance(root, str) and root.strip():
-            return (Path(root).expanduser() / p).resolve()
+            return ResolvedDataPath(
+                path=(Path(root).expanduser() / p).resolve(),
+                source="runtime_paths.yaml:data.root",
+                data_root_key=None,
+            )
 
-    return p.resolve()
+    return ResolvedDataPath(path=p.resolve(), source="CLI", data_root_key=None)
 
 
 # =============================================================================
@@ -218,7 +283,8 @@ class PathManager:
                         environment/config-aware defaults.
         data_dir
             Directory containing data files (input datasets). If None, attempts:
-              - config/runtime_paths.yaml: data.root
+              - config/runtime_paths.yaml: data.named_roots.default
+              - config/runtime_paths.yaml: data.root (legacy)
               - <base_dir>/data (created)
         results_dir
             Directory for ValSKA-produced results (tables/plots/summaries).
@@ -264,8 +330,9 @@ class PathManager:
         #
         # Priority:
         #   1) explicit constructor arg data_dir
-        #   2) runtime_paths.yaml: data.root
-        #   3) <base_dir>/data (created)
+        #   2) runtime_paths.yaml: data.named_roots.default
+        #   3) runtime_paths.yaml: data.root (legacy)
+        #   4) <base_dir>/data (created)
         if data_dir is not None:
             self.data_dir = Path(data_dir).expanduser().resolve()
             # If the user explicitly asked for a data_dir, we can create it.
@@ -274,7 +341,11 @@ class PathManager:
             cfg_data_root = None
             cfg_data = self.runtime_paths.get("data")
             if isinstance(cfg_data, dict):
-                cfg_data_root = cfg_data.get("root")
+                cfg_named_roots = cfg_data.get("named_roots")
+                if isinstance(cfg_named_roots, dict):
+                    cfg_data_root = cfg_named_roots.get("default")
+                if not cfg_data_root:
+                    cfg_data_root = cfg_data.get("root")
 
             if isinstance(cfg_data_root, str) and cfg_data_root.strip():
                 # For a configured data root, do not force creation (could be read-only / shared).
@@ -316,12 +387,16 @@ class PathManager:
 
         # Do not mkdir chains_dir here: chains are often produced externally.
 
-    def resolve_data_path(self, data_path: PathLike) -> Path:
+    def resolve_data_path(
+        self, data_path: PathLike, data_root_key: str | None = None
+    ) -> Path:
         """Resolve a dataset path using this PathManager's runtime_paths.
 
         See module-level `resolve_data_path()` for the rules.
         """
-        return resolve_data_path(data_path, self.runtime_paths)
+        return resolve_data_path(
+            data_path, self.runtime_paths, data_root_key=data_root_key
+        )
 
     def get_paths(self) -> dict[str, Path]:
         """Get a dictionary of all managed paths.
@@ -476,59 +551,8 @@ def load_paths(custom_paths_file: PathLike | None = None) -> dict[str, str]:
 
 
 # =============================================================================
-# LABEL / GROUP HELPERS
+# BAYESEOR COMPATIBILITY HELPERS
 # =============================================================================
-
-
-def _pp_key_to_percent_label(
-    key: str,
-    prefix: str,
-    label_prefix: str | None = None,
-) -> str | None:
-    """Convert ``'<prefix><pp>'`` key into a ``'<label_prefix> ±X%'`` label.
-
-    Parameters
-    ----------
-    key : str
-        Full analysis key
-        (e.g. ``'GSM_FgEoR_-1e0pp'``, ``'GL_FgEoR_1.0e-01pp'``).
-    prefix : str
-        The prefix to strip before the numeric part
-        (e.g. ``'GSM_FgEoR_'``, ``'GL_FgEoR_'``).
-    label_prefix : str, optional
-        Text to put in front of the percentage (default: derived from prefix).
-
-    Returns
-    -------
-    str or None
-        Readable label (e.g. ``'GSM -1%'``, ``'GL +0.1%'``)
-        or ``None`` if the key does not match the expected format.
-    """
-    if not key.startswith(prefix):
-        return None
-
-    #  # e.g. '-1e0pp' or '1.0e-01pp'
-    middle = key[len(prefix) :]  # noqa: E203
-    if not middle.endswith("pp"):
-        return None
-
-    mag_str = middle[:-2]
-    try:
-        mag_float = float(mag_str)
-    except ValueError:
-        return None
-
-    # In this project the 'pp' part is already percentage points
-    percent = 1.0 * mag_float
-    label_mag = f"{percent:.3g}%"
-    sign = "+" if percent > 0 else ""
-
-    if label_prefix is None:
-        # Derive something short from the prefix, e.g. 'GSM' or 'GL'
-        # 'GSM_FgEoR_' -> 'GSM', 'GL_FgEoR_' -> 'GL'
-        label_prefix = prefix.split("_", 1)[0]
-
-    return f"{label_prefix} {sign}{label_mag}"
 
 
 def build_pp_groups_from_paths(
@@ -551,86 +575,28 @@ def build_pp_groups_from_paths(
     ``label_prefixes={'GSM_FgEoR_': 'GSM', 'GL_FgEoR_': 'GL'}``
     -> labels like 'GSM -1%', 'GL -1%' instead of both 'GSM ...'
     """
-    paths = load_paths(custom_paths_file)
-    raw_groups: dict[str, list[str]] = {}
+    from valska.external_tools.bayeseor.chain_utils import (
+        build_pp_groups_from_paths as build_groups,
+    )
 
-    for key in paths.keys():
-        for prefix in prefixes:
-            if not key.startswith(prefix):
-                continue
-
-            lp = None
-            if label_prefixes is not None:
-                lp = label_prefixes.get(prefix)
-
-            label = _pp_key_to_percent_label(
-                key,
-                prefix=prefix,
-                label_prefix=lp,
-            )
-            if label is None:
-                continue
-
-            raw_groups.setdefault(label, []).append(key)
-
-    def label_to_val(lbl: str) -> float:
-        # 'GSM -0.1%' -> -0.1
-        try:
-            return float(lbl.rsplit(maxsplit=1)[-1].strip("%"))
-        except Exception:
-            return 0.0
-
-    groups: dict[str, list[str]] = {}
-    for label in sorted(raw_groups.keys(), key=label_to_val):
-        groups[label] = sorted(raw_groups[label])
-
-    return groups
+    return build_groups(
+        prefixes,
+        custom_paths_file=custom_paths_file,
+        label_prefixes=label_prefixes,
+    )
 
 
 def build_group_labels(groups: dict[str, list[str]]) -> dict[str, str]:
-    """Build a simple group_labels dict (identity mapping)."""
-    return {label: label for label in groups.keys()}
+    """Build a simple group-label identity mapping."""
+    from valska.external_tools.bayeseor.chain_utils import (
+        build_group_labels as build_labels,
+    )
 
-
-# =============================================================================
-# FILTER HELPERS FOR PERTURBATION KEYS
-# =============================================================================
-
-
-def _parse_pp_key_to_float(key: str) -> float:
-    """Parse a perturbation key of the form ``'<something><value>pp'`` to float.
-
-    This is a small internal utility to convert keys like
-    ``'GSM_FgEoR_-1e0pp'`` or ``'GL_FgOnly_1.0e-01pp'`` into the numeric value
-    (already in percentage points) used for filtering.
-
-    Parameters
-    ----------
-    key
-        Perturbation key ending with ``'pp'``.
-
-    Returns
-    -------
-    float
-        The parsed numeric value.
-
-    Raises
-    ------
-    ValueError
-        If the key does not end with ``'pp'`` or the numeric part cannot be
-        parsed as a float.
-    """
-    if not key.endswith("pp"):
-        raise ValueError(f"Key does not end with 'pp': {key}")
-
-    # Extract the last token that contains the numeric part with 'pp'
-    token = key.rsplit("_", maxsplit=1)[-1]  # e.g. '-1e0pp' or '1.0e-01pp'
-    mag_str = token[:-2]  # strip 'pp'
-    return float(mag_str)
+    return build_labels(groups)
 
 
 def filter_chain_pairs(
-    pairs: PairsMap,
+    pairs: Mapping[str, object],
     min_value: float = -0.1,
     max_value: float = 0.1,
 ) -> dict[str, object]:
@@ -657,22 +623,19 @@ def filter_chain_pairs(
     The numeric value is taken directly from the ``'<value>pp'`` suffix, e.g.
     ``'-1e0pp' -> -1.0``, ``'1.0e-01pp' -> 0.1``.
     """
-    filtered: dict[str, object] = {}
-    for key, value in pairs.items():
-        try:
-            numeric_value = _parse_pp_key_to_float(key)
-        except ValueError:
-            # Skip keys that do not follow the expected pattern
-            continue
+    from valska.external_tools.bayeseor.chain_utils import (
+        filter_chain_pairs as filter_pairs,
+    )
 
-        if min_value <= numeric_value <= max_value:
-            filtered[key] = value
-
-    return filtered
+    return filter_pairs(
+        pairs,
+        min_value=min_value,
+        max_value=max_value,
+    )
 
 
 def filter_chain_pairs_absolute_range(
-    pairs: PairsMap,
+    pairs: Mapping[str, object],
     min_abs_value: float = 0.001,
     max_abs_value: float = 0.1,
 ) -> dict[str, object]:
@@ -694,18 +657,15 @@ def filter_chain_pairs_absolute_range(
         Filtered mapping containing only keys with
         ``min_abs_value <= |value| <= max_abs_value``.
     """
-    filtered: dict[str, object] = {}
-    for key, value in pairs.items():
-        try:
-            numeric_value = abs(_parse_pp_key_to_float(key))
-        except ValueError:
-            # Skip keys that do not follow the expected pattern
-            continue
+    from valska.external_tools.bayeseor.chain_utils import (
+        filter_chain_pairs_absolute_range as filter_pairs,
+    )
 
-        if min_abs_value <= numeric_value <= max_abs_value:
-            filtered[key] = value
-
-    return filtered
+    return filter_pairs(
+        pairs,
+        min_abs_value=min_abs_value,
+        max_abs_value=max_abs_value,
+    )
 
 
 # =============================================================================
@@ -720,7 +680,7 @@ if __name__ == "__main__":
     path_manager = get_default_path_manager()
     print(path_manager)
 
-    # Example: resolve a relative dataset path via runtime_paths.yaml data.root (if configured)
+    # Example: resolve a relative dataset path via runtime_paths.yaml data.named_roots.default (if configured)
     try:
         example_rel = "example_dataset.uvh5"
         resolved = path_manager.resolve_data_path(example_rel)
@@ -730,17 +690,9 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"\nCould not resolve example data path: {exc}")
 
-    # Example usage of load_paths and grouping helpers
+    # Example usage of load_paths
     try:
         paths = load_paths()
         print(f"\nLoaded {len(paths)} paths from config/paths.yaml")
-
-        groups = build_pp_groups_from_paths(
-            prefixes=["GSM_FgEoR_", "GL_FgEoR_"],
-            label_prefixes={"GSM_FgEoR_": "GSM", "GL_FgEoR_": "GL"},
-        )
-        print("\nAvailable perturbation groups:")
-        for label, keys in groups.items():
-            print(f"  {label}: {keys}")
     except FileNotFoundError as exc:
         print(f"\nCould not load paths.yaml: {exc}")

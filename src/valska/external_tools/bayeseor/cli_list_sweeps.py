@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Examples:\n"
             "  valska-bayeseor-list-sweeps\n"
-            "  valska-bayeseor-list-sweeps --beam airy --sky GSM_plus_GLEAM\n"
+            "  valska-bayeseor-list-sweeps --beam airy_diam14m --sky GSM_plus_GLEAM\n"
             "  valska-bayeseor-list-sweeps --latest --json"
         ),
         formatter_class=argparse.RawTextHelpFormatter,

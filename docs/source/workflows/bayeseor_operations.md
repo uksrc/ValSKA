@@ -24,16 +24,22 @@ Naming conventions used in this page:
 
 Basic usage:
 
-    valska-bayeseor-help
+```bash
+valska-bayeseor-help
+```
 
 Filter by topic:
 
-    valska-bayeseor-help --topic reporting
-    valska-bayeseor-help --topic operations
+```bash
+valska-bayeseor-help --topic reporting
+valska-bayeseor-help --topic operations
+```
 
 Machine-readable output:
 
-    valska-bayeseor-help --json
+```bash
+valska-bayeseor-help --json
+```
 
 Topics currently supported:
 
@@ -51,21 +57,29 @@ Topics currently supported:
 
 Basic usage:
 
-    valska-bayeseor-resume /path/to/_sweeps/<run_id>
+```bash
+valska-bayeseor-resume /path/to/_sweeps/<run_id>
+```
 
 Generate only GPU-stage suggestions:
 
-    valska-bayeseor-resume /path/to/_sweeps/<run_id> --stage gpu
+```bash
+valska-bayeseor-resume /path/to/_sweeps/<run_id> --stage gpu
+```
 
 Generate only CPU-stage suggestions:
 
-    valska-bayeseor-resume /path/to/_sweeps/<run_id> --stage cpu
+```bash
+valska-bayeseor-resume /path/to/_sweeps/<run_id> --stage cpu
+```
 
 Machine-readable output:
 
-    valska-bayeseor-resume /path/to/_sweeps/<run_id> --json
+```bash
+valska-bayeseor-resume /path/to/_sweeps/<run_id> --json
+```
 
-Key behavior:
+Key behaviour:
 
 - skips already-complete points
 - emits minimal command set needed per point
@@ -79,32 +93,44 @@ Key behavior:
 
 Default run:
 
-    valska-bayeseor-report-all
+```bash
+valska-bayeseor-report-all
+```
 
 Filter by campaign dimensions:
 
-    valska-bayeseor-report-all --beam airy --sky GSM_plus_GLEAM
-    valska-bayeseor-report-all --run-id sweep_airy_init
-    valska-bayeseor-report-all --latest
+```bash
+valska-bayeseor-report-all --beam airy_diam14m --sky GSM_plus_GLEAM
+valska-bayeseor-report-all --run-id sweep_airy_init
+valska-bayeseor-report-all --latest
+```
 
 Skip already-reported sweeps:
 
-    valska-bayeseor-report-all --only-new
+```bash
+valska-bayeseor-report-all --only-new
+```
 
 No-plot batch mode (tables only):
 
-    valska-bayeseor-report-all --no-plots
+```bash
+valska-bayeseor-report-all --no-plots
+```
 
 Write reports under a separate root:
 
-    valska-bayeseor-report-all --out-root /path/to/report_mirror
+```bash
+valska-bayeseor-report-all --out-root /path/to/report_mirror
+```
 
 JSON output and CI-friendly failure mode:
 
-    valska-bayeseor-report-all --json
-    valska-bayeseor-report-all --fail-on-error
+```bash
+valska-bayeseor-report-all --json
+valska-bayeseor-report-all --fail-on-error
+```
 
-Key behavior:
+Key behaviour:
 
 - preserves per-sweep report structure and output files
 - records generated/skipped/error counts in summary payload
@@ -123,21 +149,29 @@ Accepted input forms for each side:
 
 Basic usage:
 
-    valska-bayeseor-compare-sweeps /path/to/sweep_A /path/to/sweep_B
+```bash
+valska-bayeseor-compare-sweeps /path/to/sweep_A /path/to/sweep_B
+```
 
 Choose comparison metric:
 
-    valska-bayeseor-compare-sweeps /path/to/A /path/to/B \
-      --metric log10_bayes_factor_signal_over_no_signal
+```bash
+valska-bayeseor-compare-sweeps /path/to/A /path/to/B \
+  --metric log10_bayes_factor_signal_over_no_signal
+```
 
 Show only top-N largest absolute deltas:
 
-    valska-bayeseor-compare-sweeps /path/to/A /path/to/B --top 20
+```bash
+valska-bayeseor-compare-sweeps /path/to/A /path/to/B --top 20
+```
 
 Machine-readable output with labels:
 
-    valska-bayeseor-compare-sweeps /path/to/A /path/to/B \
-      --left-name baseline --right-name trial --json
+```bash
+valska-bayeseor-compare-sweeps /path/to/A /path/to/B \
+  --left-name baseline --right-name trial --json
+```
 
 Compared metric is interpreted as `right - left`.
 
@@ -165,54 +199,70 @@ Important defaults:
 
 Choose one or more scopes:
 
-    --prune-logs
-    --prune-temp
-    --prune-runs
+```bash
+--prune-logs
+--prune-temp
+--prune-runs
+```
 
 or all scopes:
 
-    --all
+```bash
+--all
+```
 
 ### Dry-run preview
 
 Preview all cleanup candidates:
 
-    valska-bayeseor-cleanup --all --json
+```bash
+valska-bayeseor-cleanup --all --json
+```
 
 ### Execute log cleanup (reversible)
 
-    valska-bayeseor-cleanup --prune-logs --execute
+```bash
+valska-bayeseor-cleanup --prune-logs --execute
+```
 
 ### Execute run-directory cleanup (requires confirmation)
 
 Run cleanup for missing points only:
 
-    valska-bayeseor-cleanup \
-      --prune-runs \
-      --run-status missing \
-      --execute \
-      --confirm-runs DELETE
+```bash
+valska-bayeseor-cleanup \
+  --prune-runs \
+  --run-status missing \
+  --execute \
+  --confirm-runs DELETE
+```
 
 Optional hard-delete mode:
 
-    valska-bayeseor-cleanup \
-      --prune-runs \
-      --run-status missing \
-      --execute \
-      --confirm-runs DELETE \
-      --hard-delete
+```bash
+valska-bayeseor-cleanup \
+  --prune-runs \
+  --run-status missing \
+  --execute \
+  --confirm-runs DELETE \
+  --hard-delete
+```
 
 Age gate:
 
-    valska-bayeseor-cleanup --prune-logs --older-than-days 14 --execute
+```bash
+valska-bayeseor-cleanup --prune-logs --older-than-days 14 --execute
+```
 
 Filtering options mirror sweep discovery tools:
 
 - `--run-id`, `--beam`, `--sky`, `--latest`, `--max-results`
 
-CI-friendly behavior:
+CI-friendly behaviour:
 
-    valska-bayeseor-cleanup --prune-logs --execute --fail-on-error
+```bash
+valska-bayeseor-cleanup --prune-logs --execute --fail-on-error
+```
 
 ---
 
@@ -246,7 +296,9 @@ Each wrapper follows the same fallback order:
 
 Set the optional environment variable if needed:
 
-    export VALSKA_CONDA_ENV=valska
+```bash
+export VALSKA_CONDA_ENV=valska
+```
 
 ---
 
@@ -257,7 +309,9 @@ Current tooling uses separate command entry points (for example, `valska-bayeseo
 
 A future simplification path is to add a single root command with subcommands:
 
-    valska-bayeseor <subcommand> [...]
+```bash
+valska-bayeseor <subcommand> [...]
+```
 
 This is intentionally tracked as a future migration idea to preserve current stable workflows
 while improving discoverability and shared option handling over time.

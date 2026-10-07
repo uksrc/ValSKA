@@ -172,6 +172,288 @@ def test_cli_sweep_antenna_mode_dry_run_returns_0():
     assert code == 0
 
 
+def test_cli_sweep_parses_array_submit_options() -> None:
+    parser = cli_sweep.build_parser()
+
+    args = parser.parse_args(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+            "--dry-run",
+            "--submit-mode",
+            "array",
+            "--array-max-cpu",
+            "4",
+            "--array-max-gpu",
+            "2",
+        ]
+    )
+
+    assert args.submit_mode == "array"
+    assert args.array_max_cpu == 4
+    assert args.array_max_gpu == 2
+
+
+def test_cli_sweep_defaults_to_per_point_submit_mode() -> None:
+    parser = cli_sweep.build_parser()
+
+    args = parser.parse_args(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+            "--dry-run",
+        ]
+    )
+
+    assert args.submit_mode == "per-point"
+    assert args.array_max_cpu is None
+    assert args.array_max_gpu is None
+
+
+def test_cli_sweep_print_submit_results_handles_array_summary(capsys):
+    cli_sweep._print_submit_results(
+        [
+            {
+                "sweep_dir": "/tmp/results/bayeseor/beam/sky/_sweeps/sweep_v3",
+                "jobs_json": "/tmp/results/bayeseor/beam/sky/_sweeps/sweep_v3/jobs.json",
+                "submit_mode": "array",
+                "stage": "all",
+                "hypothesis": "both",
+                "array_tasks_json": "/tmp/results/bayeseor/beam/sky/_sweeps/sweep_v3/array_tasks.json",
+                "array_max_cpu": 4,
+                "array_max_gpu": 2,
+                "jobs": {
+                    "cpu_precompute_array": {
+                        "job_id": "DRY_RUN_CPU_ARRAY_JOB_ID"
+                    },
+                    "gpu_array": {
+                        "dependency": "afterok:DRY_RUN_CPU_ARRAY_JOB_ID",
+                        "signal_fit": {
+                            "job_id": "DRY_RUN_SIGNAL_FIT_GPU_ARRAY_JOB_ID"
+                        },
+                        "no_signal": {
+                            "job_id": "DRY_RUN_NO_SIGNAL_GPU_ARRAY_JOB_ID"
+                        },
+                    },
+                },
+                "commands": ["sbatch submit_cpu_precompute_array.sh"],
+            }
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "<unknown run_dir>" not in out
+    assert "submit_mode=array" in out
+    assert "array_max_cpu: 4" in out
+    assert "array_max_gpu: 2" in out
+    assert (
+        "jobs_json: /tmp/results/bayeseor/beam/sky/_sweeps/sweep_v3/jobs.json"
+        in out
+    )
+    assert "job_id(cpu_precompute_array): DRY_RUN_CPU_ARRAY_JOB_ID" in out
+    assert "dependency(gpu_array): afterok:DRY_RUN_CPU_ARRAY_JOB_ID" in out
+    assert (
+        "job_id(gpu_array:signal_fit): DRY_RUN_SIGNAL_FIT_GPU_ARRAY_JOB_ID"
+        in out
+    )
+    assert (
+        "job_id(gpu_array:no_signal): DRY_RUN_NO_SIGNAL_GPU_ARRAY_JOB_ID"
+        in out
+    )
+
+
+def test_cli_sweep_dry_run_uses_named_data_root(tmp_path, monkeypatch, capsys):
+    """sweep dry-run should resolve relative --data via --data-root-key."""
+
+    runtime_yaml = tmp_path / "runtime_paths.yaml"
+    runtime_yaml.write_text(
+        "\n".join(
+            [
+                f"results_root: {tmp_path / 'results'}",
+                "data:",
+                "  named_roots:",
+                f"    default: {tmp_path / 'default-data'}",
+                f"    gaussian: {tmp_path / 'gaussian-data'}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_sweep.main(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data-root-key",
+            "gaussian",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+            "--fwhm-fracs",
+            "0.0",
+            "--dry-run",
+        ]
+    )
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert str((tmp_path / "gaussian-data" / "input.uvh5").resolve()) in out
+    assert "[runtime_paths.yaml:data.named_roots.gaussian]" in out
+
+
+def test_cli_prepare_dry_run_uses_named_data_root(
+    tmp_path, monkeypatch, capsys
+):
+    """prepare dry-run should resolve relative --data via --data-root-key."""
+
+    runtime_yaml = tmp_path / "runtime_paths.yaml"
+    runtime_yaml.write_text(
+        "\n".join(
+            [
+                f"results_root: {tmp_path / 'results'}",
+                "data:",
+                "  named_roots:",
+                f"    airy_diam14m: {tmp_path / 'airy-data'}",
+                "bayeseor:",
+                f"  repo_path: {tmp_path / 'BayesEoR'}",
+                '  conda_sh: "source /tmp/conda.sh"',
+                "  conda_env: bayeseor",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_prepare.main(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data-root-key",
+            "airy_diam14m",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+            "--dry-run",
+        ]
+    )
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert str((tmp_path / "airy-data" / "input.uvh5").resolve()) in out
+    assert "[runtime_paths.yaml:data.named_roots.airy_diam14m]" in out
+
+
+def test_cli_prepare_manifest_records_named_data_root(
+    tmp_path, monkeypatch, capsys
+):
+    """A real prepare should record named data-root provenance."""
+
+    runtime_yaml = tmp_path / "runtime_paths.yaml"
+    runtime_yaml.write_text(
+        "\n".join(
+            [
+                f"results_root: {tmp_path / 'results'}",
+                "data:",
+                "  named_roots:",
+                f"    airy_diam14m: {tmp_path / 'airy-data'}",
+                "bayeseor:",
+                f"  repo_path: {tmp_path / 'BayesEoR'}",
+                '  conda_sh: "source /tmp/conda.sh"',
+                "  conda_env: bayeseor",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_prepare.main(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data-root-key",
+            "airy_diam14m",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+        ]
+    )
+
+    assert code == 0
+    capsys.readouterr()
+    manifests = sorted((tmp_path / "results").rglob("manifest.json"))
+    assert len(manifests) == 1
+    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert manifest["data_path"] == str(
+        (tmp_path / "airy-data" / "input.uvh5").resolve()
+    )
+    assert manifest["data_path_source"] == (
+        "runtime_paths.yaml:data.named_roots.airy_diam14m"
+    )
+    assert manifest["data_root_key"] == "airy_diam14m"
+
+
+def test_cli_sweep_missing_named_data_root_returns_2(
+    tmp_path, monkeypatch, capsys
+):
+    """A missing --data-root-key should fail before dry-run output."""
+
+    runtime_yaml = tmp_path / "runtime_paths.yaml"
+    runtime_yaml.write_text(
+        "\n".join(
+            [
+                f"results_root: {tmp_path / 'results'}",
+                "data:",
+                "  named_roots:",
+                f"    gaussian: {tmp_path / 'gaussian-data'}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_sweep.main(
+        [
+            "--beam",
+            "airy",
+            "--sky",
+            "GLEAM_plus_GSM",
+            "--data-root-key",
+            "missing",
+            "--data",
+            "input.uvh5",
+            "--run-id",
+            "r001",
+            "--dry-run",
+        ]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "data root key 'missing' not found" in err
+    assert "Available keys: gaussian" in err
+
+
 def test_cli_sweep_dry_run_color_always(capsys, monkeypatch):
     """Dry-run output can be colorized explicitly for demos."""
     monkeypatch.delenv("NO_COLOR", raising=False)
@@ -227,7 +509,7 @@ def test_cli_sweep_dry_run_color_never(capsys):
     assert code == 0
     out = capsys.readouterr().out
     assert "\x1b[" not in out
-    assert "[runtime_paths.yaml:data.root]" in out
+    assert "[DRY RUN] Sweep would be executed with:" in out
 
 
 def test_cli_sweep_dry_run_no_color_env_suppresses_color(capsys, monkeypatch):

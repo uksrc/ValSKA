@@ -6,12 +6,19 @@
 results_root: ~/UKSRC/ValSKA/results
 
 
-# Default location for input datasets.
-# If a CLI argument like --data is given as a *relative* path, ValSKA will resolve it as:
-#   <data.root>/<relative-path>
-# Absolute paths are used as-is.
+# Locations for input datasets. If --data is relative, ValSKA resolves it as:
+#   <data.named_roots.default>/<relative-path>
+# or, with --data-root-key <name>:
+#   <data.named_roots.<name>>/<relative-path>
+# Absolute --data paths are used as-is.
 data:
-  root:  ~/path/to/data/dir
+  named_roots:
+    default: ~/path/to/default/data/dir
+    # gaussian: ~/path/to/gaussian/vis
+    # airy_diam14m: ~/path/to/airy_diam14m/vis
+
+  # Legacy fallback if named_roots.default is not set:
+  # root: ~/path/to/data/dir
 
 bayeseor:
   # Path to a local clone of BayesEoR used to locate scripts/run-analysis.py

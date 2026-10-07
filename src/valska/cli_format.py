@@ -23,7 +23,7 @@ _STYLES = {
 
 
 class CliColors:
-    """Apply Rich terminal styles when color is enabled for a stream."""
+    """Apply Rich terminal styles when colour is enabled for a stream."""
 
     def __init__(
         self,
@@ -83,13 +83,13 @@ class CliColors:
 
 
 def add_color_argument(parser: ArgumentParser) -> None:
-    """Add the standard ValSKA color-mode option to a CLI parser."""
+    """Add the standard ValSKA colour-mode option to a CLI parser."""
     parser.add_argument(
         "--color",
         choices=["auto", "always", "never"],
         default="auto",
         help=(
-            "Colorize human-readable terminal output. "
+            "Colourise human-readable terminal output. "
             "Default: auto (enabled only for TTY output and disabled by NO_COLOR)."
         ),
     )
@@ -109,7 +109,7 @@ def add_progress_argument(parser: ArgumentParser) -> None:
 
 
 def resolve_color_mode(raw: object) -> ColorMode:
-    """Return a validated color mode from argparse output."""
+    """Return a validated colour mode from argparse output."""
     if raw in ("auto", "always", "never"):
         return cast(ColorMode, raw)
     return "auto"
