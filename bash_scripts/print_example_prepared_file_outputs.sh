@@ -7,7 +7,7 @@
 #
 # Examples:
 #   # default: print only manifest (and check tool field)
-#   ./bash_scripts/print_example_prepared_file_outputs.sh --beam chromatic_Gaussian --sky GLEAM --data "<data-file>" --template validation_chromatic_Gaussian.yaml --run-id sweep
+#   ./bash_scripts/print_example_prepared_file_outputs.sh --beam chromatic_Gaussian --sky GLEAM --data-root-key gaussian --data "<data-file>" --template validation_chromatic_Gaussian.yaml --run-id sweep
 #
 #   # show manifest + jobs.json + submit scripts + yaml + artefacts
 #   ./bash_scripts/print_example_prepared_file_outputs.sh --show manifest,jobs,scripts,yaml,artefacts ...
@@ -24,15 +24,16 @@
 #   ./bash_scripts/print_example_prepared_file_outputs.sh --keep \
 #     --beam chromatic_Gaussian \
 #     --sky GLEAM \
+#     --data-root-key gaussian \
 #     --data "gsm_plus_gleam-158.30-167.10-MHz-nf-38-fov-19.4deg-circ-field-1_quentin.uvh5" \
 #     --template validation_chromatic_Gaussian.yaml \
 #     --run-id sweep
 #
 # Example output (paths & timestamps will vary):
 #
-# Running: valska-bayeseor-prepare --beam chromatic_Gaussian --sky GLEAM --data ... --template validation_chromatic_Gaussian.yaml --run-id sweep --results-root /tmp/valska-bayeseor-manifests-XXXX
+# Running: valska-bayeseor-prepare --beam chromatic_Gaussian --sky GLEAM --data-root-key gaussian --data ... --template validation_chromatic_Gaussian.yaml --run-id sweep --results-root <temporary-results-root>
 #
-# ==== Manifest: /tmp/valska-bayeseor-manifests-XXXX/bayeseor/chromatic_Gaussian/GLEAM/validation_chromatic_Gaussian/default/sweep/manifest.json ====
+# ==== Manifest: <temporary-results-root>/bayeseor/chromatic_Gaussian/GLEAM/validation_chromatic_Gaussian/default/sweep/manifest.json ====
 # {
 #   "tool": "bayeseor",
 #   "created_utc": "20260125T123456Z",
@@ -42,13 +43,13 @@
 #   "variant": "validation_chromatic_Gaussian",
 #   "run_label": "default",
 #   "run_id": "sweep",
-#   "results_root": "/tmp/valska-bayeseor-manifests-XXXX",
-#   "run_dir": "/tmp/valska-bayeseor-manifests-XXXX/.../sweep",
+#   "results_root": "<temporary-results-root>",
+#   "run_dir": "<temporary-results-root>/.../sweep",
 #   "template_name": "validation_chromatic_Gaussian.yaml",
-#   "data_path": "/shared/.../gsm_plus_gleam-158...uvh5",
+#   "data_path": "<data-root>/gsm_plus_gleam-158...uvh5",
 #   "hypothesis": "both",
-#   "bayeseor": {"install": {"repo_path": "/home/ps550/BayesEoR", "run_script": "run.sh"}},
-#   "artefacts": {"run_script": "/tmp/.../run.sh"}
+#   "bayeseor": {"install": {"repo_path": "<bayeseor-repo>", "run_script": "run.sh"}},
+#   "artefacts": {"run_script": "<temporary-results-root>/.../run.sh"}
 # }
 # OK: manifest tool is 'bayeseor'
 #
@@ -85,6 +86,10 @@ KEEP=0
 SHOW_LIST=()
 SHOW_ALL=0
 ARGS=()
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+TMP_PARENT="${VALSKA_TMPDIR:-$PROJECT_ROOT/temp/tmp}"
 
 usage() {
   cat <<USAGE
@@ -150,7 +155,8 @@ for a in "${ARGS[@]:-}"; do
 done
 
 if [[ $RESULTS_SPECIFIED == false ]]; then
-  TMPDIR=$(mktemp -d /tmp/valska-bayeseor-manifests-XXXX)
+  mkdir -p "$TMP_PARENT"
+  TMPDIR=$(mktemp -d "$TMP_PARENT/valska-bayeseor-manifests-XXXX")
   trap '[[ ${KEEP:-0} -eq 0 ]] && rm -rf "$TMPDIR"' EXIT
   CLI_ARGS=("${ARGS[@]}" --results-root "$TMPDIR")
   SEARCH_ROOT="$TMPDIR"

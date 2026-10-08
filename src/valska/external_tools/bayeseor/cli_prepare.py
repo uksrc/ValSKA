@@ -55,14 +55,18 @@ Backwards compatibility
 
 Data path resolution
 --------------------
-If you pass --data as a relative path, it is resolved using
+If you pass --data as a relative path, it is resolved using either an explicit
+named root from runtime_paths.yaml:data.named_roots (via --data-root-key),
+runtime_paths.yaml:data.named_roots.default, or the backwards-compatible
 runtime_paths.yaml:data.root if set.
 
 Example runtime_paths.yaml::
 
   results_root: /share/nas-0-3/psims/validation_results/UKSRC
   data:
-    root: /path/to/datasets
+    named_roots:
+      default: /path/to/default/datasets
+      gaussian: /path/to/gaussian/datasets
 
 Then ValSKA will resolve::
 
@@ -98,7 +102,10 @@ from valska.external_tools.bayeseor import (
     list_templates,
     prepare_bayeseor_run,
 )
-from valska.utils import get_default_path_manager, resolve_data_path
+from valska.utils import (
+    get_default_path_manager,
+    resolve_data_path_info,
+)
 
 
 def _utc_stamp() -> str:
@@ -209,7 +216,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--data",
         type=Path,
         required=True,
-        help="Path to the UVH5 dataset. Relative paths may be resolved via runtime_paths.yaml:data.root.",
+        help=(
+            "Path to the UVH5 dataset. Relative paths may be resolved via "
+            "runtime_paths.yaml:data.named_roots.<key>, "
+            "data.named_roots.default, or data.root."
+        ),
+    )
+    parser.add_argument(
+        "--data-root-key",
+        type=str,
+        default=None,
+        help=(
+            "Named root under runtime_paths.yaml:data.named_roots used to "
+            "resolve relative --data paths."
+        ),
     )
 
     parser.add_argument(
@@ -567,13 +587,16 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(cfg_unique, bool):
             unique = cfg_unique
 
-    # data resolution (supports runtime_paths.yaml:data.root)
+    # data resolution (supports data.named_roots.<key>, default, and legacy data.root)
     try:
-        data_path = resolve_data_path(args.data, runtime)
-        data_src = "runtime_paths.yaml:data.root"
-    except Exception:
-        data_path = Path(args.data).expanduser()
-        data_src = "CLI"
+        data_info = resolve_data_path_info(
+            args.data, runtime, data_root_key=args.data_root_key
+        )
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    data_path = data_info.path
+    data_src = data_info.source
 
     # run_label
     if args.run_label is not None and str(args.run_label).strip():
@@ -771,6 +794,8 @@ def main(argv: list[str] | None = None) -> int:
         run_dir=None,  # single source of truth for canonical path construction
         unique=unique,
         data_path=Path(data_path),
+        data_path_source=data_src,
+        data_root_key=data_info.data_root_key,
         overrides=overrides,
         slurm_cpu=slurm_cpu,
         slurm_gpu=slurm_gpu,

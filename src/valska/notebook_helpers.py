@@ -14,12 +14,15 @@ import numpy
 import pandas as pd
 from IPython.display import HTML, display
 
+from valska.external_tools.bayeseor.bayeseor_direct_plotting import (
+    BeamAnalysisPlotter,
+)
+
 from .evidence import (
     ChainPair,
     calculate_bayes_factor,
     run_complete_bayeseor_analysis,
 )
-from .plotting import BeamAnalysisPlotter
 
 if TYPE_CHECKING:
     from pyuvdata import UVData
@@ -422,7 +425,7 @@ def run_airy_banter_summary(
             )
         )
     else:
-        print("No successful results to summarize.")
+        print("No successful results to summarise.")
 
     summary = results.get("summary", {})
     if len(summary_df):

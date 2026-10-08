@@ -5,7 +5,31 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+
 from valska.external_tools.bayeseor import cli_report_all
+
+
+def _write_chain_outputs(path: Path) -> None:
+    np.savetxt(path / "k-vals.txt", np.array([0.1, 0.2]))
+    np.savetxt(path / "k-vals-bins.txt", np.array([0.08, 0.15, 0.25]))
+    (path / "version.txt").write_text("test-version\n", encoding="utf-8")
+    (path / "args.json").write_text(
+        json.dumps({"log_priors": True, "priors": [[0.0, 4.0], [0.0, 4.0]]}),
+        encoding="utf-8",
+    )
+    np.savetxt(
+        path / "data-.txt",
+        np.array(
+            [
+                [0.10, 0.0, 1.0, 1.2],
+                [0.20, 0.0, 1.2, 1.4],
+                [0.30, 0.0, 1.4, 1.6],
+                [0.25, 0.0, 1.6, 1.8],
+                [0.15, 0.0, 1.8, 2.0],
+            ]
+        ),
+    )
 
 
 def _mk_point(run_dir: Path, *, signal_ns: float, no_signal_ns: float) -> None:
@@ -13,9 +37,7 @@ def _mk_point(run_dir: Path, *, signal_ns: float, no_signal_ns: float) -> None:
         run_dir / "output" / "signal_fit" / "MN-signal" / "data-stats.dat"
     )
     signal_stats.parent.mkdir(parents=True, exist_ok=True)
-    (signal_stats.parent / "data-.txt").write_text(
-        "dummy chain content\n", encoding="utf-8"
-    )
+    _write_chain_outputs(signal_stats.parent)
     signal_stats.write_text(
         (
             "Nested Sampling Global Log-Evidence           : "
@@ -30,9 +52,7 @@ def _mk_point(run_dir: Path, *, signal_ns: float, no_signal_ns: float) -> None:
         run_dir / "output" / "no_signal" / "MN-no-signal" / "data-stats.dat"
     )
     no_signal_stats.parent.mkdir(parents=True, exist_ok=True)
-    (no_signal_stats.parent / "data-.txt").write_text(
-        "dummy chain content\n", encoding="utf-8"
-    )
+    _write_chain_outputs(no_signal_stats.parent)
     no_signal_stats.write_text(
         (
             "Nested Sampling Global Log-Evidence           : "
@@ -195,3 +215,44 @@ def test_cli_report_all_fail_on_error_returns_1(
     assert payload["summary"]["count_generated"] == 1
     assert payload["summary"]["count_errors"] == 1
     assert any(row["status"] == "error" for row in payload["sweeps"])
+
+
+def test_cli_report_all_propagates_plot_config(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    results_root = tmp_path / "results"
+    _mk_sweep(
+        results_root,
+        beam="airy_diam14m",
+        sky="GSM_plus_GLEAM",
+        run_id="sweep_a",
+        with_points=True,
+    )
+    plot_config = tmp_path / "plot.yaml"
+    plot_config.write_text(
+        "data:\n  hypotheses: no_signal\n  nhistbins: 7\n",
+        encoding="utf-8",
+    )
+
+    code = cli_report_all.main(
+        [
+            "--results-root",
+            str(results_root),
+            "--json",
+            "--no-plots",
+            "--include-plot-analysis-results",
+            "--plot-config",
+            str(plot_config),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    result = payload["sweeps"][0]["result"]
+    assert payload["settings"]["plot_config"] == str(plot_config)
+    assert result["plot_analysis_results_png"] is not None
+    names = {
+        Path(path).name for path in result["valska_plot_analysis_results_pngs"]
+    }
+    assert names == {"plot_analysis_results_no_signal_valska.png"}

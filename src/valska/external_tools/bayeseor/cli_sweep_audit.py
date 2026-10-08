@@ -74,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Examples:\n"
             "  valska-bayeseor-sweep-audit\n"
-            "  valska-bayeseor-sweep-audit --beam airy --sky GSM_plus_GLEAM\n"
+            "  valska-bayeseor-sweep-audit --beam airy_diam14m --sky GSM_plus_GLEAM\n"
             "  valska-bayeseor-sweep-audit --latest --json\n"
             "  valska-bayeseor-sweep-audit --fail-on-invalid"
         ),

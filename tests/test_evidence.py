@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from valska import evidence
+from valska.external_tools.bayeseor import evidence
 
 from .constants import mock_read_chains
 

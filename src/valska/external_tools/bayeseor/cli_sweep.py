@@ -18,7 +18,10 @@ from valska.external_tools.bayeseor import (
     CondaRunner,
     get_template_path,
 )
-from valska.utils import get_default_path_manager, resolve_data_path
+from valska.utils import (
+    get_default_path_manager,
+    resolve_data_path_info,
+)
 
 from . import sweep as sweep_mod  # for DRY helpers (run_label + point dirs)
 from .cli_prepare import _get_nested, _slurm_defaults
@@ -27,6 +30,7 @@ from .sweep import run_fwhm_sweep, sweep_root
 _STAGE = Literal["none", "cpu", "gpu", "all"]
 _HYP = Literal["signal_fit", "no_signal", "both"]
 _PERT = Literal["fwhm_deg", "antenna_diameter"]
+_SUBMIT_MODE = Literal["per-point", "array"]
 
 
 def _shell_quote(s: str) -> str:
@@ -49,6 +53,7 @@ def _build_rerunnable_sweep_cmd(
     beam_model: str,
     sky_model: str,
     data_arg: Path,
+    data_root_key: str | None,
     run_id: str,
     perturb_parameter: _PERT,
     fwhm_fracs: list[float] | None,
@@ -69,6 +74,9 @@ def _build_rerunnable_sweep_cmd(
     submit_dry_run: bool,
     force: bool,
     resubmit: bool,
+    submit_mode: _SUBMIT_MODE,
+    array_max_cpu: int | None,
+    array_max_gpu: int | None,
     submit_stage: _STAGE,
 ) -> str:
     """
@@ -83,6 +91,8 @@ def _build_rerunnable_sweep_cmd(
     parts += ["--sky", _shell_quote(sky_model)]
 
     parts += ["--data", _shell_quote(str(data_arg))]
+    if data_root_key is not None:
+        parts += ["--data-root-key", _shell_quote(data_root_key)]
     parts += ["--run-id", _shell_quote(run_id)]
     parts += ["--perturb-parameter", _shell_quote(perturb_parameter)]
 
@@ -139,6 +149,12 @@ def _build_rerunnable_sweep_cmd(
         parts.append("--force")
     if resubmit:
         parts.append("--resubmit")
+    if submit_mode != "per-point":
+        parts += ["--submit-mode", _shell_quote(submit_mode)]
+    if array_max_cpu is not None:
+        parts += ["--array-max-cpu", _shell_quote(str(array_max_cpu))]
+    if array_max_gpu is not None:
+        parts += ["--array-max-gpu", _shell_quote(str(array_max_gpu))]
 
     parts += ["--submit", _shell_quote(submit_stage)]
 
@@ -163,11 +179,37 @@ def _print_submit_results(submit_results: Any) -> None:
         We support both:
           - jobs.cpu_precompute.job_id
           - jobs.gpu.{signal_fit,no_signal}.job_id
+          - jobs.cpu_precompute_array.job_id
+          - jobs.gpu_array.{signal_fit,no_signal}.job_id
         """
         out: list[str] = []
         jobs = r.get("jobs")
         if not isinstance(jobs, dict):
             return out
+
+        cpu_array = jobs.get("cpu_precompute_array")
+        if isinstance(cpu_array, dict):
+            jid = cpu_array.get("job_id")
+            if jid:
+                out.append(f"job_id(cpu_precompute_array): {jid}")
+
+        gpu_array = jobs.get("gpu_array")
+        if isinstance(gpu_array, dict):
+            dep = gpu_array.get("dependency")
+            if dep:
+                out.append(f"dependency(gpu_array): {dep}")
+
+            sf = gpu_array.get("signal_fit")
+            if isinstance(sf, dict):
+                jid = sf.get("job_id")
+                if jid:
+                    out.append(f"job_id(gpu_array:signal_fit): {jid}")
+
+            ns = gpu_array.get("no_signal")
+            if isinstance(ns, dict):
+                jid = ns.get("job_id")
+                if jid:
+                    out.append(f"job_id(gpu_array:no_signal): {jid}")
 
         cpu = jobs.get("cpu_precompute")
         if isinstance(cpu, dict):
@@ -195,17 +237,34 @@ def _print_submit_results(submit_results: Any) -> None:
 
         return out
 
+    def _is_array_submit_result(r: dict[str, Any]) -> bool:
+        if r.get("submit_mode") == "array":
+            return True
+        if r.get("sweep_dir") or r.get("array_tasks_json"):
+            return True
+        jobs = r.get("jobs")
+        return isinstance(jobs, dict) and (
+            "cpu_precompute_array" in jobs or "gpu_array" in jobs
+        )
+
     if isinstance(submit_results, list):
         for r in submit_results:
             if not isinstance(r, dict):
                 print(f"  - {r}")
                 continue
 
-            run_dir = r.get("run_dir", "<unknown run_dir>")
+            is_array = _is_array_submit_result(r)
+            if is_array:
+                location = r.get("sweep_dir", "<unknown sweep_dir>")
+            else:
+                location = r.get("run_dir", "<unknown run_dir>")
             stage = r.get("stage", "")
             hyp = r.get("hypothesis", "")
-            prefix = f"  - {run_dir}"
+            prefix = f"  - {location}"
             meta = []
+            submit_mode = r.get("submit_mode")
+            if submit_mode:
+                meta.append(f"submit_mode={submit_mode}")
             if stage:
                 meta.append(f"stage={stage}")
             if hyp:
@@ -214,6 +273,17 @@ def _print_submit_results(submit_results: Any) -> None:
                 prefix += " [" + ", ".join(meta) + "]"
 
             print(prefix)
+
+            if is_array:
+                for key, label in (
+                    ("jobs_json", "jobs_json"),
+                    ("array_tasks_json", "array_tasks_json"),
+                    ("array_max_cpu", "array_max_cpu"),
+                    ("array_max_gpu", "array_max_gpu"),
+                ):
+                    val = r.get(key)
+                    if val is not None:
+                        print(f"      {label}: {val}")
 
             # job ids / dependencies
             for line in _extract_job_ids(r):
@@ -228,7 +298,11 @@ def _print_submit_results(submit_results: Any) -> None:
                 for c in cmds:
                     print(f"      {c}")
             else:
-                compact = {k: v for k, v in r.items() if k not in {"run_dir"}}
+                compact = {
+                    k: v
+                    for k, v in r.items()
+                    if k not in {"run_dir", "sweep_dir"}
+                }
                 print("      (no commands field; raw result follows)")
                 print(
                     "      "
@@ -364,7 +438,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
-        "--data", type=Path, required=True, help="Path to the UVH5 dataset."
+        "--data",
+        type=Path,
+        required=True,
+        help=(
+            "Path to the UVH5 dataset. Relative paths may be resolved via "
+            "runtime_paths.yaml:data.named_roots.<key>, "
+            "data.named_roots.default, or data.root."
+        ),
+    )
+    p.add_argument(
+        "--data-root-key",
+        type=str,
+        default=None,
+        help=(
+            "Named root under runtime_paths.yaml:data.named_roots used to "
+            "resolve relative --data paths."
+        ),
     )
 
     # New preferred axes
@@ -525,6 +615,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optionally submit stages after preparing. Default: none.",
     )
     p.add_argument(
+        "--submit-mode",
+        choices=["per-point", "array"],
+        default="per-point",
+        help="Submission strategy for sweep jobs. Default: per-point.",
+    )
+    p.add_argument(
+        "--array-max-cpu",
+        type=int,
+        default=None,
+        help="Maximum concurrent CPU array tasks when --submit-mode=array.",
+    )
+    p.add_argument(
+        "--array-max-gpu",
+        type=int,
+        default=None,
+        help="Maximum concurrent GPU array tasks when --submit-mode=array.",
+    )
+    p.add_argument(
         "--hypothesis",
         choices=["signal_fit", "no_signal", "both"],
         default="both",
@@ -603,13 +711,16 @@ def main(argv: list[str] | None = None) -> int:
             else "env/default"
         )
 
-    # Resolve data path (supports runtime_paths.yaml:data.root)
+    # Resolve data path (supports data.named_roots.<key>, default, and legacy data.root)
     try:
-        data_resolved = resolve_data_path(args.data, runtime)
-        data_src = "runtime_paths.yaml:data.root"
-    except Exception:
-        data_resolved = Path(args.data).expanduser()
-        data_src = "CLI"
+        data_info = resolve_data_path_info(
+            args.data, runtime, data_root_key=args.data_root_key
+        )
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    data_resolved = data_info.path
+    data_src = data_info.source
 
     # repo_path
     repo_path = args.bayeseor_repo
@@ -817,6 +928,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(f"  unique:       {bool(args.unique)}")
         print(f"  submit:       {args.submit}")
+        print(f"  submit_mode:  {args.submit_mode}")
+        if args.submit_mode == "array":
+            print(f"  array_max_cpu:{args.array_max_cpu}")
+            print(f"  array_max_gpu:{args.array_max_gpu}")
         print(f"  sbatch_exe:   {sbatch_exe}")
         print(f"  submit_dry:   {bool(args.submit_dry_run)}")
         print(f"  force:        {bool(args.force)}")
@@ -868,6 +983,8 @@ def main(argv: list[str] | None = None) -> int:
         variant=variant,
         run_id=args.run_id,
         data_path=Path(data_resolved).expanduser(),
+        data_path_source=data_src,
+        data_root_key=data_info.data_root_key,
         overrides=overrides_dict,
         perturb_parameter=perturb_parameter,
         perturb_fracs=fracs,
@@ -881,6 +998,9 @@ def main(argv: list[str] | None = None) -> int:
         submit_dry_run=bool(args.submit_dry_run),
         force=bool(args.force),
         resubmit=bool(args.resubmit),
+        submit_mode=args.submit_mode,
+        array_max_cpu=args.array_max_cpu,
+        array_max_gpu=args.array_max_gpu,
         record="jobs.json",
         dry_run=False,
     )
@@ -894,10 +1014,19 @@ def main(argv: list[str] | None = None) -> int:
             "run_id": sweep_res.run_id,
             "perturb_parameter": sweep_res.perturb_parameter,
             "data_path": str(sweep_res.data_path),
+            "data_path_source": sweep_res.data_path_source,
+            "data_root_key": sweep_res.data_root_key,
             "created_utc": sweep_res.created_utc,
             "sweep_dir": str(sweep_res.sweep_dir),
             "sweep_manifest_json": str(sweep_res.sweep_manifest_json),
             "template_yaml": str(sweep_res.template_yaml),
+            "submit_mode": sweep_res.submit_mode,
+            "sweep_jobs_json": str(sweep_res.sweep_jobs_json)
+            if sweep_res.sweep_jobs_json is not None
+            else None,
+            "array_tasks_json": str(sweep_res.array_tasks_json)
+            if sweep_res.array_tasks_json is not None
+            else None,
             "points": [
                 {
                     "perturb_parameter": p.perturb_parameter,
@@ -930,6 +1059,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  variant:             {sweep_res.variant}")
     print(f"  perturb_parameter:   {sweep_res.perturb_parameter}")
     print(f"  points:              {len(sweep_res.points)}")
+    print(f"  submit_mode:         {sweep_res.submit_mode}")
+    if sweep_res.array_tasks_json is not None:
+        print(f"  array_tasks.json:    {sweep_res.array_tasks_json}")
+    if sweep_res.sweep_jobs_json is not None:
+        print(f"  sweep_jobs.json:     {sweep_res.sweep_jobs_json}")
 
     did_submit = args.submit != "none"
     if did_submit:
@@ -966,6 +1100,7 @@ def main(argv: list[str] | None = None) -> int:
         beam_model=beam_model,
         sky_model=sky_model,
         data_arg=args.data,
+        data_root_key=args.data_root_key,
         run_id=args.run_id,
         perturb_parameter=perturb_parameter,
         fwhm_fracs=fracs,
@@ -986,12 +1121,16 @@ def main(argv: list[str] | None = None) -> int:
         submit_dry_run=bool(args.submit_dry_run),
         force=bool(args.force),
         resubmit=bool(args.resubmit),
+        submit_mode=args.submit_mode,
+        array_max_cpu=args.array_max_cpu,
+        array_max_gpu=args.array_max_gpu,
         submit_stage="cpu",
     )
     cmd_gpu = _build_rerunnable_sweep_cmd(
         beam_model=beam_model,
         sky_model=sky_model,
         data_arg=args.data,
+        data_root_key=args.data_root_key,
         run_id=args.run_id,
         perturb_parameter=perturb_parameter,
         fwhm_fracs=fracs,
@@ -1012,12 +1151,16 @@ def main(argv: list[str] | None = None) -> int:
         submit_dry_run=bool(args.submit_dry_run),
         force=bool(args.force),
         resubmit=bool(args.resubmit),
+        submit_mode=args.submit_mode,
+        array_max_cpu=args.array_max_cpu,
+        array_max_gpu=args.array_max_gpu,
         submit_stage="gpu",
     )
     cmd_all = _build_rerunnable_sweep_cmd(
         beam_model=beam_model,
         sky_model=sky_model,
         data_arg=args.data,
+        data_root_key=args.data_root_key,
         run_id=args.run_id,
         perturb_parameter=perturb_parameter,
         fwhm_fracs=fracs,
@@ -1038,6 +1181,9 @@ def main(argv: list[str] | None = None) -> int:
         submit_dry_run=bool(args.submit_dry_run),
         force=bool(args.force),
         resubmit=bool(args.resubmit),
+        submit_mode=args.submit_mode,
+        array_max_cpu=args.array_max_cpu,
+        array_max_gpu=args.array_max_gpu,
         submit_stage="all",
     )
 

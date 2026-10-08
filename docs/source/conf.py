@@ -41,16 +41,7 @@ autoclass_content = "both"
 
 autodoc_mock_imports = [
     "bayeseor",
-    "anesthetic",
-    "matplotlib",
-    "pandas",
     "IPython",
-    "yaml",
-    "tqdm",
-    "ruamel",
-    "ruamel.yaml",
-    "rich",
-    "pyuvdata",
 ]
 
 templates_path = ["_templates"]

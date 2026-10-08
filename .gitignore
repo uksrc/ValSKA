@@ -179,12 +179,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
-
 # Visual Studio Code
 #  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
@@ -195,26 +189,66 @@ cython_debug/
 # macOS Finder metadata
 .DS_Store
 
-# Local AI / agent tooling state
-.codex
-.claude
-.cursor
+# Local tooling state
+.abstra
+.agents
 .aider*
+.assistant
 .avante
+.chatgpt
+.claude
+.cline
+.codex
 .continue
+.copilot
+.cursor
+.gemini
+.openai
+.roo
+.windsurf
+.mcp.json
+
+# Local tooling instructions and history
+.clinerules
+.cursorignore
+.cursorindexingignore
+.cursorrules
+.rooignore
+.roomodes
+.windsurfrules
+AGENT.md
+AGENTS.md
+AGENT.local.md
+AGENTS.local.md
+ASSISTANT.md
+CLAUDE.md
+CLAUDE.local.md
+CODEX.md
+CODEX.local.md
+GEMINI.md
+GEMINI.local.md
+HANDOFF.md
+HANDOFFS.md
+MEMORY.md
+PROMPT.md
+PROMPTS.md
+SESSION.md
+SESSIONS.md
+TRANSCRIPT.md
+TRANSCRIPTS.md
+prompts/
+transcripts/
+.github/agents/
+.github/chatmodes/
+.github/copilot-instructions.md
+.github/instructions/
+.github/prompts/
 
 # Ruff stuff:
 .ruff_cache/
 
 # PyPI configuration file
 .pypirc
-
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
 
 # Marimo
 marimo/_static/

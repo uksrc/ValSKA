@@ -1,0 +1,223 @@
+# Active default ValSKA-native BayesEoR analysis plot configuration.
+#
+# Report commands load this file automatically when --plot-config is omitted
+# and no ./plot.yaml exists in the current working directory. Use
+# --plot-config to point at a different file for one run.
+#
+# This file is intended to be edited for project-level plot defaults. The
+# neighbouring default_analysis_plot.yaml is a reference copy of the built-in
+# dataclass defaults.
+
+data:
+  # Which BayesEoR hypotheses to render. Supported values are signal_fit,
+  # no_signal, or both in the list.
+  hypotheses: [signal_fit]
+
+  # Chain format to read. ValSKA currently supports the MultiNest outputs
+  # produced by the BayesEoR workflows.
+  sampler: multinest
+
+  # Use posterior weights from the chain when computing medians, intervals,
+  # histograms, and upper limits.
+  posterior_weighted: true
+
+  # Credible intervals to compute for posterior summaries. Keeping both 68 and
+  # 95 makes both ranges available even if only one is drawn by default.
+  cred_intervals: [68, 95]
+
+  # Credible interval shown as the power-spectrum error bars.
+  cred_interval: 68
+
+  # Treat selected bins as upper limits rather than detections.
+  calc_uplims: true
+
+  # Posterior quantile used for upper-limit values. 0.95 corresponds to a
+  # one-sided 95 percent upper limit.
+  uplim_quantile: 0.95
+
+  # How to classify non-detections. noise_proxy compares posterior mass with
+  # the expected noise level; posterior_edge marks bins whose posterior
+  # histogram peaks at the lower edge; manual uses upper_limit_indices only;
+  # off draws all bins as detections.
+  upper_limit_mode: noise_proxy
+
+  # How classified non-detections appear in the left-side spectrum/residual
+  # panels. omit hides them because these chains used log-uniform priors and
+  # are not calibrated uniform-prior upper limits; arrow reproduces the older
+  # upper-limit-arrow style.
+  upper_limit_plot_mode: omit
+
+  # In noise_proxy mode, classify a bin as a non-detection when this fraction
+  # of posterior mass lies below the expected noise power.
+  upper_limit_probability_threshold: 0.95
+
+  # In noise_proxy mode, classify a bin as a detection when this fraction of
+  # posterior mass lies above the expected noise power. Ambiguous bins are
+  # shown as detections for continuity unless manually overridden.
+  detection_probability_threshold: 0.95
+
+  # Optional zero-based k-bin indices forced to non-detections. In manual mode
+  # these define all non-detections; in noise_proxy/posterior_edge mode they
+  # override the classifier.
+  upper_limit_indices: null
+
+  # Optional per-chain overrides for bins that should be treated as detections.
+  # Keys are chain labels after label formatting; values are zero-based indices.
+  detection_indices: {}
+
+  # If true, draw all bins as detections even when calc_uplims is enabled.
+  ignore_uplims: false
+
+  # Number of histogram bins used for each posterior panel.
+  nhistbins: 31
+
+  # If true, normalize posterior histograms to probability density.
+  density: false
+
+  # If true, compute posterior kurtosis for each k-bin. This is not needed for
+  # upper-limit classification; it is available for downstream diagnostics.
+  calc_kurtosis: false
+
+  # Maximum histogram-bin index counted as a lower-edge peak in auto
+  # upper-limit mode. The default only treats the first posterior bin as the
+  # lower edge.
+  auto_uplim_peak_bin: 0
+
+  # Power-spectrum quantity to plot: dmps for Delta^2(k), or ps for P(k).
+  ps_kind: dmps
+
+  # Temperature unit used by labels and conversions.
+  temp_unit: mK
+
+  # If true, label cosmological distances with little-h units.
+  little_h_units: false
+
+  # Optional flat expected P(k) level used to draw the reference spectrum. The
+  # default value matches the historical ValSKA report noise level.
+  expected_ps: 107388.83034108151
+
+  # Optional expected Delta^2(k) values. Leave null to derive Delta^2(k) from
+  # expected_ps for each k-bin.
+  expected_dmps: null
+
+figure:
+  # Figure title shown above the combined spectrum/posterior layout.
+  suptitle: Sweep signal fit chain comparison
+
+  # Height, in inches, of the power-spectrum panel group.
+  plot_height_ps: 4.0
+
+  # Overall figure width, in inches.
+  plot_width: 7.0
+
+  # Vertical spacing between power-spectrum subplots.
+  hspace_ps: 0.05
+
+  # Relative heights for the main spectrum panel and residual panel.
+  height_ratios_ps: [1.0, 0.5]
+
+  # Draw absolute differences relative to the expected spectrum.
+  plot_diff: false
+
+  # Draw fractional differences relative to the expected spectrum.
+  plot_fracdiff: true
+
+  # Optional y-axis limits for the main spectrum panel.
+  ylim_ps: null
+
+  # Y-axis limits for the residual or fractional-difference panel.
+  ylim_diff_ps: [-1.0, 1.0]
+
+  # Height, in inches, of each posterior histogram row.
+  plot_height_post: 1.0
+
+  # Vertical spacing between posterior histogram panels.
+  hspace_post: 0.01
+
+  # Use logarithmic y-axis scaling for posterior histograms.
+  log_y: false
+
+  # Lower y-limit for posterior histograms when log_y is enabled.
+  ymin_post: 1.0e-16
+
+  # Show k-bin labels next to posterior rows.
+  show_k_vals: true
+
+  # Draw a single figure-level legend rather than per-axis legends.
+  figlegend: true
+
+  # Number of columns in the figure-level legend.
+  legend_ncols: 6
+
+  # Top edge of the subplot region in figure coordinates.
+  top: 0.875
+
+  # Right edge of the power-spectrum subplot region in figure coordinates.
+  right_ps: 0.46
+
+  # Left edge of the posterior subplot region in figure coordinates.
+  left_post: 0.54
+
+style:
+  # Optional explicit legend labels. Leave null to derive labels from run
+  # metadata.
+  labels: null
+
+  # Optional explicit colours. Leave null to derive colours from color_mode.
+  colors: null
+
+  # Colour strategy. perturbation colours chains by perturbation value; use a
+  # constant list in colors for full manual control.
+  color_mode: perturbation
+
+  # Matplotlib colormap used when color_mode derives colours automatically.
+  cmap: coolwarm
+
+  # If true, format numeric perturbation labels for compact legends.
+  format_perturbation_labels: true
+
+  # Marker used for spectrum points.
+  marker: o
+
+  # Error-bar cap size.
+  capsize: 3.0
+
+  # Line width for plotted series.
+  lw: 3.0
+
+  # Line style for the expected reference spectrum.
+  ls_expected: ":"
+
+  # Horizontal offset applied to spectrum points. This is useful if overplotted
+  # chains need slight separation.
+  x_offset: 0.0
+
+  # Z-order offset applied to plotted chains.
+  zorder_offset: 0
+
+  # Draw prior ranges in the power-spectrum panel.
+  plot_priors: true
+
+  # Draw prior ranges in posterior histogram panels.
+  posterior_plot_priors: true
+
+  # Prior-band grouping. Supported values are shared, grouped, per_chain, and
+  # "off". Quote "off" because plain YAML off is parsed as boolean false.
+  prior_mode: shared
+
+  # Transparency for prior bands in the power-spectrum panel.
+  prior_alpha: 0.3
+
+  # Transparency for prior bands in posterior histogram panels.
+  posterior_prior_alpha: 0.3
+
+  # Colour used for prior bands. Any Matplotlib named colour or hex colour is
+  # valid. The British spelling prior_colour is accepted as a YAML alias.
+  prior_color: lightsteelblue
+
+  # Legend label for the expected reference spectrum.
+  expected_label: Noise level
+
+outputs:
+  # Prefix used when report commands construct ValSKA-rendered plot filenames.
+  filename_prefix: plot_analysis_results
