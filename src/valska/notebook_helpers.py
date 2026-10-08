@@ -7,9 +7,10 @@ import json
 from contextlib import redirect_stdout
 from os.path import commonpath
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
+import numpy
 import pandas as pd
 from IPython.display import HTML, display
 
@@ -22,6 +23,40 @@ from .evidence import (
     calculate_bayes_factor,
     run_complete_bayeseor_analysis,
 )
+
+if TYPE_CHECKING:
+    from pyuvdata import UVData
+
+
+def unpack_shape(arr: numpy.typing.NDArray) -> tuple[int, int, int, int]:
+    """Extract dimensions from data_array with flexible shape handling."""
+    if arr.ndim == 4:
+        # (Nblts, Nspws, Nfreq, Npol)
+        return arr.shape
+    elif arr.ndim == 3:
+        # (Nblts, Nfreq, Npol)
+        nblts, nfreq, npol = arr.shape
+        return nblts, 1, nfreq, npol
+    else:
+        raise ValueError(
+            f"Expected a 3D or 4D visibility array, got shape {arr.shape}"
+        )
+
+
+def extract_vis(
+    uv: UVData, time_idx: int, pol_idx: int, freq_idx: int | None = None
+) -> numpy.typing.NDArray:
+    """Extract visibilities across frequency for a single time."""
+    time_mask = uv.time_array == uv.time_array[time_idx]
+
+    if uv.data_array.ndim == 4:
+        if freq_idx is None:
+            return uv.data_array[time_mask, 0, :, pol_idx]
+        return uv.data_array[time_mask, 0, freq_idx, pol_idx]
+
+    if freq_idx is None:
+        return uv.data_array[time_mask, :, pol_idx]
+    return uv.data_array[time_mask, freq_idx, pol_idx]
 
 
 def extract_airy_point_bayes_factors(

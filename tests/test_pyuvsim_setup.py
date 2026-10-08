@@ -42,6 +42,7 @@ def _pyuvsim_config(tmp_path) -> dict[str, Any]:
     sky_model = "GLEAM"
     run_label = "default"
     run_id = "r001"
+    variant = "fov-19.4-oscar-sm"
     return {
         "template_yaml": template_yaml,
         "install": install,
@@ -51,6 +52,7 @@ def _pyuvsim_config(tmp_path) -> dict[str, Any]:
         "sky_model": sky_model,
         "run_label": run_label,
         "run_id": run_id,
+        "variant": variant,
     }
 
 
