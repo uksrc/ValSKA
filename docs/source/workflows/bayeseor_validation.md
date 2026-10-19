@@ -47,7 +47,9 @@ and **submission**.
 
 The *prepare* phase is performed using:
 
-    valska-bayeseor-prepare
+```bash
+valska-bayeseor-prepare
+```
 
 This phase:
 
@@ -75,7 +77,9 @@ The output of this phase is a **self-contained run directory** that can be:
 
 The *submit* phase is performed using:
 
-    valska-bayeseor-submit <run_dir>
+```bash
+valska-bayeseor-submit <run_dir>
+```
 
 This phase:
 
@@ -93,15 +97,21 @@ does not attempt to manage or monitor running jobs.
 
 A typical prepared run directory has the form:
 
-  <results_root>/bayeseor/<beam_model>/<sky_model>/<variant>/<run_label>/<run_id>/
+```text
+<results_root>/bayeseor/<beam_model>/<sky_model>/<variant>/<run_label>/<run_id>/
+```
 
 or, if `--unique` is used:
 
-  <results_root>/bayeseor/<beam_model>/<sky_model>/<variant>/<run_label>/<run_id>/<timestamp>/
+```text
+<results_root>/bayeseor/<beam_model>/<sky_model>/<variant>/<run_label>/<run_id>/<timestamp>/
+```
 
 For sweep campaigns, point run directories are created under:
 
-  <results_root>/bayeseor/<beam_model>/<sky_model>/_sweeps/<run_id>/<variant>/<run_label>/
+```text
+<results_root>/bayeseor/<beam_model>/<sky_model>/_sweeps/<run_id>/<variant>/<run_label>/
+```
 
 Inside this directory you will typically find:
 
@@ -129,7 +139,9 @@ BayesEoR runs are structured as two stages:
 
 Submitted via:
 
-    submit_cpu_precompute.sh
+```bash
+submit_cpu_precompute.sh
+```
 
 ### 2. GPU inference stages
 
@@ -139,7 +151,9 @@ Submitted via:
 
 Submitted via:
 
-    submit_<hyp>_gpu_run.sh
+```bash
+submit_<hyp>_gpu_run.sh
+```
 
 GPU jobs depend explicitly on the successful completion of the CPU stage
 using SLURM `afterok` dependencies.
@@ -194,7 +208,9 @@ If a job hits walltime:
 
 To requeue cleanly:
 
-    valska-bayeseor-submit <run_dir> --stage gpu --resubmit
+```bash
+valska-bayeseor-submit <run_dir> --stage gpu --resubmit
+```
 
 This will:
 - archive the existing `jobs.json`
@@ -209,9 +225,11 @@ This pattern avoids accidental double submission while making recovery trivial.
 
 At all times, users may bypass ValSKA-managed submission and run:
 
-    sbatch submit_cpu_precompute.sh
-    sbatch submit_signal_fit_gpu_run.sh
-    sbatch submit_no_signal_gpu_run.sh
+```bash
+sbatch submit_cpu_precompute.sh
+sbatch submit_signal_fit_gpu_run.sh
+sbatch submit_no_signal_gpu_run.sh
+```
 
 ValSKA does not hide or replace native scheduler behaviour.
 

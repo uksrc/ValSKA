@@ -17,6 +17,7 @@ Quick copy‑paste examples
 ./bash_scripts/check_bayeseor_manifests.sh --keep \
   --beam chromatic_Gaussian \
   --sky GLEAM \
+  --data-root-key gaussian \
   --data "gsm_plus_gleam-158.30-167.10-MHz-nf-38-fov-19.4deg-circ-field-1_quentin.uvh5" \
   --template validation_chromatic_Gaussian.yaml \
   --run-id sweep
@@ -27,6 +28,7 @@ Quick copy‑paste examples
 ./bash_scripts/check_bayeseor_manifests.sh --show-all --keep \
   --beam chromatic_Gaussian \
   --sky GLEAM \
+  --data-root-key gaussian \
   --data "gsm_plus_gleam-158.30-167.10-MHz-..." \
   --template validation_chromatic_Gaussian.yaml \
   --run-id sweep
@@ -55,9 +57,9 @@ CLI options (summary)
 
 Example minimal output (illustrative)
 ```text
-Running: valska-bayeseor-prepare --beam chromatic_Gaussian --sky GLEAM --data ... --template validation_chromatic_Gaussian.yaml --run-id sweep --results-root /tmp/valska-bayeseor-manifests-XXXX
+Running: valska-bayeseor-prepare --beam chromatic_Gaussian --sky GLEAM --data-root-key gaussian --data ... --template validation_chromatic_Gaussian.yaml --run-id sweep --results-root <temporary-results-root>
 
-==== Manifest: /tmp/.../sweep/manifest.json ====
+==== Manifest: <temporary-results-root>/.../sweep/manifest.json ====
 {
   "tool": "bayeseor",
   "created_utc": "20260125T123456Z",
@@ -65,7 +67,7 @@ Running: valska-bayeseor-prepare --beam chromatic_Gaussian --sky GLEAM --data ..
   "beam_model": "chromatic_Gaussian",
   "sky_model": "GLEAM",
   "run_id": "sweep",
-  "run_dir": "/tmp/.../sweep",
+  "run_dir": "<temporary-results-root>/.../sweep",
   "template_name": "validation_chromatic_Gaussian.yaml",
   ...
 }
@@ -85,12 +87,12 @@ priors:
   - name: fwhm
 
 ---- artefacts (from manifest) ----
-run_script: /tmp/.../run.sh
+run_script: <temporary-results-root>/.../run.sh
   #!/bin/sh
   echo "ok"
 
 Checked 1 manifest(s) — all OK
-Temporary results-root kept at: /tmp/valska-bayeseor-manifests-XXXX
+Temporary results-root kept at: <temporary-results-root>
 ```
 
 Exit codes
@@ -100,7 +102,7 @@ Exit codes
 
 Troubleshooting
 - No manifest found:
-  - Ensure `--data` is a valid runtime_paths key or an absolute path to the .uvh5.
+  - Ensure `--data` is a valid relative path under the selected/default data root, or an absolute path to the .uvh5.
   - The checker uses a temporary `--results-root` unless you pass `--results-root <dir>` or `--keep`. Use `--keep` to inspect generated files.
 - Wrong `tool` field:
   - Manifest `tool` should be `"bayeseor"`. If it differs, inspect `src/valska/external_tools/bayeseor/setup.py`.

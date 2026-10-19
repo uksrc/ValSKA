@@ -1,0 +1,73 @@
+# Default ValSKA-native BayesEoR analysis plot configuration.
+#
+# This file mirrors the built-in defaults used when --plot-config is omitted.
+# Copy it and edit values to customise report plot formatting.
+
+data:
+  hypotheses: [signal_fit]
+  sampler: multinest
+  posterior_weighted: true
+  cred_intervals: [68, 95]
+  cred_interval: 68
+  calc_uplims: true
+  uplim_quantile: 0.95
+  upper_limit_mode: noise_proxy
+  upper_limit_plot_mode: omit
+  upper_limit_probability_threshold: 0.95
+  detection_probability_threshold: 0.95
+  upper_limit_indices: null
+  detection_indices: {}
+  ignore_uplims: false
+  nhistbins: 31
+  density: false
+  calc_kurtosis: false
+  auto_uplim_peak_bin: 0
+  ps_kind: dmps
+  temp_unit: mK
+  little_h_units: false
+  expected_ps: 107388.83034108151
+  expected_dmps: null
+
+figure:
+  suptitle: Sweep signal fit chain comparison
+  plot_height_ps: 4.0
+  plot_width: 7.0
+  hspace_ps: 0.05
+  height_ratios_ps: [1.0, 0.5]
+  plot_diff: false
+  plot_fracdiff: true
+  ylim_ps: null
+  ylim_diff_ps: [-1.0, 1.0]
+  plot_height_post: 1.0
+  hspace_post: 0.01
+  log_y: false
+  ymin_post: 1.0e-16
+  show_k_vals: true
+  figlegend: true
+  legend_ncols: 6
+  top: 0.875
+  right_ps: 0.46
+  left_post: 0.54
+
+style:
+  labels: null
+  colors: null
+  color_mode: perturbation
+  cmap: coolwarm
+  format_perturbation_labels: true
+  marker: o
+  capsize: 3.0
+  lw: 3.0
+  ls_expected: ":"
+  x_offset: 0.0
+  zorder_offset: 0
+  plot_priors: true
+  posterior_plot_priors: true
+  prior_mode: shared
+  prior_alpha: 0.18
+  posterior_prior_alpha: 0.10
+  prior_color: lightsteelblue
+  expected_label: Noise level
+
+outputs:
+  filename_prefix: plot_analysis_results

@@ -143,6 +143,7 @@ include-package-data = true
 valska = [
   "config/*.yaml",
   "external_tools/bayeseor/templates/*.yaml",
+  "external_tools/bayeseor/plot_configs/*.yaml",
   "external_tools/pyuvsim/templates/*.yaml",
 ]
 valska_hera_beam = [
@@ -160,7 +161,11 @@ fallback_version = "0.1.0"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
-exclude = ["src/valska_hera_beam/_version.py"]
+extend-exclude = [
+  "src/valska/_version.py",
+  "src/valska_hera_beam/_version.py",
+]
+force-exclude = true
 
 [tool.ruff.lint]
 # E/F = Flake8, I = Isort, UP = Pyupgrade

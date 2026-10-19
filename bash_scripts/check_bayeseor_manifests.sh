@@ -7,11 +7,16 @@
 # ./bash_scripts/check_bayeseor_manifests.sh --keep \
 #   --beam chromatic_Gaussian \
 #   --sky GLEAM \
+#   --data-root-key gaussian \
 #   --data "gsm_plus_gleam-158.30-167.10-MHz-nf-38-fov-19.4deg-circ-field-1_quentin.uvh5" \
 #   --template validation_chromatic_Gaussian.yaml \
 #   --run-id sweep
 
 set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+TMP_PARENT="${VALSKA_TMPDIR:-$PROJECT_ROOT/temp/tmp}"
 
 KEEP=0
 ARGS=()
@@ -29,7 +34,8 @@ for a in "${ARGS[@]:-}"; do
 done
 
 if [ "$RESULTS_SPECIFIED" = false ]; then
-  TMPDIR=$(mktemp -d /tmp/valska-bayeseor-manifests-XXXX)
+  mkdir -p "$TMP_PARENT"
+  TMPDIR=$(mktemp -d "$TMP_PARENT/valska-bayeseor-manifests-XXXX")
   trap 'if [ "${KEEP:-0}" -eq 0 ]; then rm -rf "$TMPDIR"; fi' EXIT
   CLI_ARGS=("${ARGS[@]}" --results-root "$TMPDIR")
   SEARCH_ROOT="$TMPDIR"

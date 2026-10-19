@@ -21,4 +21,5 @@ Contents
    testing
    api
    workflows
+   reports
    design

@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="valska-bayeseor-sweep-status",
         description=(
-            "Inspect one sweep directory and summarize per-point output health."
+            "Inspect one sweep directory and summarise per-point output health."
         ),
         epilog=(
             "Examples:\n"

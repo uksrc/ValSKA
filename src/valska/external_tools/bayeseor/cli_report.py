@@ -19,9 +19,17 @@ from valska.cli_format import (
     resolve_progress_mode,
     show_progress,
 )
+from valska.external_tools.bayeseor.plot_configs import (
+    resolve_analysis_plot_config_path,
+)
 from valska.external_tools.bayeseor.report import (
+    ReportArtefactExportResult,
     SweepReportResult,
+    export_report_artefacts,
     generate_sweep_report,
+)
+from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
+    BayesEoRPlotConfig,
 )
 
 _TableStyle = str
@@ -69,7 +77,28 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Also generate a BeamAnalysisPlotter.plot_analysis_results figure "
-            "for all complete signal_fit points."
+            "and a ValSKA-rendered figure for complete points."
+        ),
+    )
+    parser.add_argument(
+        "--plot-config",
+        type=Path,
+        default=None,
+        help=(
+            "Optional YAML config for ValSKA-rendered BayesEoR analysis plots "
+            "(used with --include-plot-analysis-results). If omitted, "
+            "ValSKA uses ./plot.yaml when present, then the packaged "
+            "plot_configs/plot.yaml if available."
+        ),
+    )
+    parser.add_argument(
+        "--export-report-assets",
+        type=Path,
+        default=None,
+        help=(
+            "Copy generated report artefacts into this directory and write "
+            "artefact_manifest.json. This is intended for documentation report "
+            "asset snapshots; the canonical report outputs remain in --out-dir."
         ),
     )
     parser.add_argument(
@@ -108,25 +137,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_perturbation_label(raw_label: object) -> str:
+    label = str(raw_label)
+    try:
+        prefix, raw_frac = label.rsplit("_", 1)
+        frac = float(raw_frac)
+    except Exception:
+        return label
+
+    if prefix in {"antdiam", "antenna_diameter"}:
+        return f"ΔD/D = {frac * 100:+.2f}%"
+    if prefix == "fwhm":
+        return f"ΔFWHM/FWHM = {frac * 100:+.2f}%"
+    return f"Δ = {frac * 100:+.2f}%"
+
+
 def _perturbation_fraction(raw_label: object) -> float | None:
     label = str(raw_label)
     try:
-        return float(label.split("_", 1)[1])
+        return float(label.rsplit("_", 1)[1])
     except Exception:
         return None
-
-
-def _format_perturbation_label(raw_label: object) -> str:
-    label = str(raw_label)
-    frac = _perturbation_fraction(label)
-    if frac is None:
-        return label
-
-    if label.startswith("antdiam_"):
-        return f"ΔD/D = {frac * 100:+.2f}%"
-    if label.startswith("fwhm_"):
-        return f"ΔFWHM/FWHM = {frac * 100:+.2f}%"
-    return f"Δ = {frac * 100:+.2f}%"
 
 
 def _coerce_float(raw: object) -> float:
@@ -180,7 +211,7 @@ def _print_complete_analysis_table(
     rows: list[dict[str, object]], *, style: _TableStyle, colors: CliColors
 ) -> None:
     if not rows:
-        print("\nNo successful complete-analysis results to summarize.")
+        print("\nNo successful complete-analysis results to summarise.")
         return
 
     table_rows = [
@@ -190,10 +221,12 @@ def _print_complete_analysis_table(
             ),
             "log_bf": _format_log_bayes_factor(row.get("log_bayes_factor")),
             "validation": _validation_display(
-                row.get("validation", "ERROR"), style=style
+                row.get("validation", "ERROR"),
+                style=style,
             ),
             "validation_style": _validation_style(
-                row.get("validation", "ERROR"), colors=colors
+                row.get("validation", "ERROR"),
+                colors=colors,
             ),
             "interpretation": _plain_interpretation(
                 row.get("log_bayes_factor")
@@ -268,6 +301,8 @@ def _print_summary(result: SweepReportResult, *, colors: CliColors) -> None:
             "  plot_analysis_results: "
             f"{colors.path(result.plot_analysis_results_png)}"
         )
+    for path in result.valska_plot_analysis_results_pngs:
+        print(f"  valska_plot_analysis_results: {colors.path(path)}")
     if result.complete_analysis_json is not None:
         print(
             "  complete_analysis_json: "
@@ -278,6 +313,28 @@ def _print_summary(result: SweepReportResult, *, colors: CliColors) -> None:
             "  complete_analysis_csv:  "
             f"{colors.path(result.complete_analysis_csv)}"
         )
+
+
+def _export_payload(
+    export: ReportArtefactExportResult | None,
+) -> dict[str, object] | None:
+    if export is None:
+        return None
+    return {
+        "assets_dir": str(export.assets_dir),
+        "manifest_json": str(export.manifest_json),
+        "artefact_paths": [str(path) for path in export.artefact_paths],
+        "artefact_count": len(export.artefact_paths),
+    }
+
+
+def _print_export_summary(
+    export: ReportArtefactExportResult, *, colors: CliColors
+) -> None:
+    print("\n" + colors.heading("Report assets exported:"))
+    print(f"  assets_dir:     {colors.path(export.assets_dir)}")
+    print(f"  manifest_json:  {colors.path(export.manifest_json)}")
+    print(f"  artefact_count: {len(export.artefact_paths)}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -292,6 +349,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
+        plot_config_path = None
+        plot_config = None
+        if bool(args.include_plot_analysis_results):
+            plot_config_path = resolve_analysis_plot_config_path(
+                args.plot_config
+            )
+            plot_config = BayesEoRPlotConfig.from_yaml(plot_config_path)
         result = generate_sweep_report(
             sweep_dir=Path(args.sweep_dir),
             out_dir=Path(args.out_dir) if args.out_dir is not None else None,
@@ -304,10 +368,19 @@ def main(argv: list[str] | None = None) -> int:
                 args.include_complete_analysis_table
                 or args.print_complete_analysis_table
             ),
+            plot_config=plot_config,
             show_progress=show_progress(
                 resolve_progress_mode(args.progress),
                 json_out=bool(args.json_out),
             ),
+        )
+        artefact_export = (
+            export_report_artefacts(
+                result,
+                Path(args.export_report_assets),
+            )
+            if args.export_report_assets is not None
+            else None
         )
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -331,6 +404,12 @@ def main(argv: list[str] | None = None) -> int:
             "plot_analysis_results_png": str(result.plot_analysis_results_png)
             if result.plot_analysis_results_png is not None
             else None,
+            "valska_plot_analysis_results_pngs": [
+                str(path) for path in result.valska_plot_analysis_results_pngs
+            ],
+            "plot_config": str(plot_config_path)
+            if plot_config_path is not None
+            else None,
             "complete_analysis_json": str(result.complete_analysis_json)
             if result.complete_analysis_json is not None
             else None,
@@ -338,14 +417,18 @@ def main(argv: list[str] | None = None) -> int:
             if result.complete_analysis_csv is not None
             else None,
             "complete_analysis_rows": result.complete_analysis_rows,
+            "report_assets": _export_payload(artefact_export),
         }
         print(json.dumps(payload, indent=2))
         return 0
 
     colors = CliColors(
-        resolve_color_mode(args.color), enabled=not bool(args.json_out)
+        resolve_color_mode(args.color),
+        enabled=not bool(args.json_out),
     )
     _print_summary(result, colors=colors)
+    if artefact_export is not None:
+        _print_export_summary(artefact_export, colors=colors)
     if args.print_complete_analysis_table:
         _print_complete_analysis_table(
             result.complete_analysis_rows,

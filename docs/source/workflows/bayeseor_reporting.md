@@ -24,11 +24,14 @@ Given a sweep directory containing `sweep_manifest.json`, it can generate:
   - `log_evidence_by_model_vs_perturb_frac.png`
 - optional extended outputs:
   - `plot_analysis_results_signal_fit.png` (from `BeamAnalysisPlotter.plot_analysis_results`)
+  - `plot_analysis_results_signal_fit_valska.png` (from the ValSKA-native BayesEoR plot renderer)
   - `complete_analysis_results.json` and `complete_analysis_successful.csv` (from `run_complete_bayeseor_analysis`)
 
 By default, output files are written under:
 
-    <sweep_dir>/report/
+```text
+<sweep_dir>/report/
+```
 
 Plot styling conventions (for publication-quality readability):
 
@@ -44,32 +47,204 @@ Plot styling conventions (for publication-quality readability):
 
 Basic run (tables + default evidence plots):
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id>
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id>
+```
 
 Airy sweep helper can trigger this automatically after sweep preparation/submission:
 
-    bash_scripts/valska-bayeseor-sweep-airy_diam14m-GSM_plus_GLEAM.sh --submit all --report
+```bash
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-airy_diam14m-GSM_plus_GLEAM_v3.sh --submit all --report
+```
 
 Use `--report-no-plots` on the helper for table-only reporting.
 
-JSON summary payload:
+For the clean v2 rerun campaign, use the v3 sweep wrappers. They explicitly set
+the clean results root to:
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id> --json
+```text
+validation_results/UKSRC/v2
+```
+
+and pass the appropriate named data root (`gaussian` or `airy_diam14m`) to
+ValSKA. Activate the ValSKA environment first so the wrapper uses the current
+installed `valska-bayeseor-sweep` and `valska-bayeseor-report` entry points:
+
+```bash
+conda activate valska
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-airy_diam14m-GSM_plus_GLEAM_v3.sh --dry-run
+```
+
+The wrappers default to prepare-only; pass `--submit all` when ready to submit
+both CPU and GPU stages:
+
+```bash
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-airy_diam14m-GSM_plus_GLEAM_v3.sh --submit all
+```
+
+Gaussian v3 wrappers are available for achromatic and chromatic beams with GSM,
+GLEAM, and GSM_plus_GLEAM skies:
+
+```text
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-achromatic_Gaussian-GSM_v3.sh
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-achromatic_Gaussian-GLEAM_v3.sh
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-achromatic_Gaussian-GSM_plus_GLEAM_v3.sh
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-chromatic_Gaussian-GSM_v3.sh
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-chromatic_Gaussian-GLEAM_v3.sh
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-chromatic_Gaussian-GSM_plus_GLEAM_v3.sh
+```
+
+JSON summary:
+
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> --json
+```
 
 Skip evidence plots (tables only):
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id> --no-plots
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> --no-plots
+```
 
 Choose evidence estimator used for ΔlnZ/Bayes factor:
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id> --evidence-source ns
-    valska-bayeseor-report /path/to/_sweeps/<run_id> --evidence-source ins
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> --evidence-source ns
+valska-bayeseor-report /path/to/_sweeps/<run_id> --evidence-source ins
+```
 
 Enable extended outputs:
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id> \
-      --include-plot-analysis-results \
-      --include-complete-analysis-table
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> \
+  --include-plot-analysis-results \
+  --include-complete-analysis-table
+```
+
+Regenerate the extended report for the UKSRC Airy validation sweep:
+
+```bash
+valska-bayeseor-report \
+  validation_results/UKSRC/bayeseor/airy_diam14m/GSM_plus_GLEAM/_sweeps/sweep_airy_init \
+  --include-plot-analysis-results \
+  --include-complete-analysis-table
+```
+
+This writes the ValSKA-rendered analysis figure to:
+
+```text
+validation_results/UKSRC/bayeseor/airy_diam14m/GSM_plus_GLEAM/_sweeps/sweep_airy_init/report/plot_analysis_results_signal_fit_valska.png
+```
+
+Refresh a documentation report's local figure/table assets at the same time:
+
+```bash
+valska-bayeseor-report \
+  validation_results/UKSRC/bayeseor/airy_diam14m/GSM_plus_GLEAM/_sweeps/sweep_airy_init \
+  --include-plot-analysis-results \
+  --include-complete-analysis-table \
+  --export-report-assets \
+  docs/source/reports/hera_beam/uksrc_airy_diam14m_gsm_plus_gleam_sweep_airy_init_assets
+```
+
+This copies the generated report artefacts into the chosen asset directory and
+writes `artefact_manifest.json` there. The canonical generated outputs still
+live under `<sweep_dir>/report/`; the copied assets are a documentation snapshot
+for figures, CSV tables, and reviewable report evidence. Paths in the manifest
+are relative to the sweep or asset directory so the snapshot is portable.
+
+Print the colourised complete-analysis summary table in the terminal:
+
+```bash
+valska-bayeseor-report \
+  validation_results/UKSRC/bayeseor/airy_diam14m/GSM_plus_GLEAM/_sweeps/sweep_airy_init \
+  --include-plot-analysis-results \
+  --print-complete-analysis-table
+```
+
+Use plain validation labels and disable colour for ASCII-only logs:
+
+```bash
+valska-bayeseor-report \
+  validation_results/UKSRC/bayeseor/airy_diam14m/GSM_plus_GLEAM/_sweeps/sweep_airy_init \
+  --include-plot-analysis-results \
+  --print-complete-analysis-table \
+  --complete-analysis-table-style plain \
+  --color never
+```
+
+Customise the ValSKA-native BayesEoR analysis plot:
+
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> \
+  --include-plot-analysis-results \
+  --plot-config plot.yaml
+```
+
+ValSKA ships two plot config files:
+
+```text
+src/valska/external_tools/bayeseor/plot_configs/plot.yaml
+src/valska/external_tools/bayeseor/plot_configs/default_analysis_plot.yaml
+```
+
+When `--plot-config` is omitted, report commands first use `./plot.yaml` if it
+exists, then the packaged `plot_configs/plot.yaml` if available, and finally
+fall back to built-in defaults. `default_analysis_plot.yaml` is the reference
+copy that mirrors the built-in defaults. Minimal
+`plot.yaml` example:
+
+```yaml
+data:
+  hypotheses: both        # signal_fit, no_signal, or both
+  cred_interval: 68
+  upper_limit_mode: noise_proxy  # noise_proxy, posterior_edge, manual, or off
+  upper_limit_plot_mode: omit    # omit or arrow
+  uplim_quantile: 0.95
+figure:
+  suptitle: Custom BayesEoR chain comparison
+style:
+  colors: ["C0", "C3"]
+```
+
+Useful styling controls include:
+
+```yaml
+style:
+  prior_mode: shared          # shared, grouped, per_chain, or off
+  prior_alpha: 0.18
+  posterior_plot_priors: true
+  posterior_prior_alpha: 0.10
+  prior_color: lightsteelblue # named Matplotlib colour or hex colour
+  color_mode: perturbation    # perturbation or cycle
+  cmap: coolwarm
+  format_perturbation_labels: true
+```
+
+The plot config also accepts ``prior_colour`` as a YAML alias for
+``prior_color``. The default non-detection classifier is a proxy, not a full
+per-k Bayesian evidence comparison: ``upper_limit_mode: noise_proxy`` compares
+posterior mass with the expected noise power and classifies a bin as a
+non-detection when at least ``upper_limit_probability_threshold`` of that mass
+lies below the noise level. Because these posteriors currently come from
+log-uniform priors rather than the uniform-prior runs needed for calibrated
+upper limits, the default ``upper_limit_plot_mode: omit`` hides classified
+non-detections from the left-side spectrum and residual panels rather than
+drawing upper-limit arrows. Use ``upper_limit_plot_mode: arrow`` only when that
+visual convention is wanted for comparison. ``upper_limit_mode: manual`` with
+``upper_limit_indices`` gives fully explicit control, ``posterior_edge`` keeps
+the simple lower-edge posterior-peak heuristic available for diagnostics, and
+``upper_limit_mode: off`` draws every bin as a detection. ``calc_kurtosis``
+remains a diagnostic output; it is not used as the sole automatic decision rule
+because it measures shape but not where the posterior lies relative to the
+noise power or prior.
+
+When `--include-plot-analysis-results` is used, ValSKA keeps the legacy
+BayesEoR-delegated comparison PNG and also writes ValSKA-rendered PNGs such as
+`plot_analysis_results_signal_fit_valska.png`. The ValSKA-native reader and
+renderer port the BSD 3-Clause licensed BayesEoR analysis-plot algorithms so
+plot construction can be configured within ValSKA while preserving numerical
+parity with BayesEoR chain summaries.
 
 Print the complete-analysis results as a terminal table as well as writing
 the JSON and CSV artefacts:
@@ -91,8 +266,10 @@ payload is required.
 
 Custom output directory:
 
-    valska-bayeseor-report /path/to/_sweeps/<run_id> \
-      --out-dir /path/to/custom_report_dir
+```bash
+valska-bayeseor-report /path/to/_sweeps/<run_id> \
+  --out-dir /path/to/custom_report_dir
+```
 
 ---
 
@@ -100,30 +277,42 @@ Custom output directory:
 
 ValSKA also provides a convenience wrapper:
 
-    bash_scripts/valska-bayeseor-report-sweep.sh --sweep-dir /path/to/_sweeps/<run_id>
+```bash
+bash_scripts/valska-bayeseor-report-sweep.sh --sweep-dir /path/to/_sweeps/<run_id>
+```
 
 To discover available sweep directories quickly, use:
 
-    valska-bayeseor-list-sweeps
+```bash
+valska-bayeseor-list-sweeps
+```
 
 JSON output mode (for scripting):
 
-    valska-bayeseor-list-sweeps --json
+```bash
+valska-bayeseor-list-sweeps --json
+```
 
 Filter examples:
 
-    valska-bayeseor-list-sweeps --beam airy --sky GSM_plus_GLEAM
-    valska-bayeseor-list-sweeps --run-id sweep_airy_init --latest
+```bash
+valska-bayeseor-list-sweeps --beam airy_diam14m --sky GSM_plus_GLEAM
+valska-bayeseor-list-sweeps --run-id sweep_airy_init --latest
+```
 
 Shell helper equivalent:
 
-    bash_scripts/valska-list-sweeps.sh
+```bash
+bash_scripts/valska-list-sweeps.sh
+```
 
 The shell helper is a thin wrapper around `valska-bayeseor-list-sweeps`.
 
 JSON output mode (for scripting):
 
-    bash_scripts/valska-list-sweeps.sh --json
+```bash
+bash_scripts/valska-list-sweeps.sh --json
+```
 
 ---
 
@@ -131,46 +320,66 @@ JSON output mode (for scripting):
 
 For quick, command-local usage examples, run:
 
-    valska-bayeseor-list-sweeps --help
-    valska-bayeseor-sweep-status --help
-    valska-bayeseor-validate-sweep --help
-    valska-bayeseor-sweep-audit --help
+```bash
+valska-bayeseor-list-sweeps --help
+valska-bayeseor-sweep-status --help
+valska-bayeseor-validate-sweep --help
+valska-bayeseor-sweep-audit --help
+```
 
 Check per-point output completeness for a sweep:
 
-    valska-bayeseor-sweep-status /path/to/_sweeps/<run_id>
+```bash
+valska-bayeseor-sweep-status /path/to/_sweeps/<run_id>
+```
 
 Machine-readable status payload:
 
-    valska-bayeseor-sweep-status /path/to/_sweeps/<run_id> --json
+```bash
+valska-bayeseor-sweep-status /path/to/_sweeps/<run_id> --json
+```
 
 Validate sweep integrity with exit-code semantics:
 
-    valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id>
+```bash
+valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id>
+```
 
 Allow partial sweeps (at least one complete point):
 
-    valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --allow-partial
+```bash
+valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --allow-partial
+```
 
 Require `jobs.json` for every point:
 
-    valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --require-jobs-json
+```bash
+valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --require-jobs-json
+```
 
 JSON validation payload (includes `exit_code` and `failures`):
 
-    valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --json
+```bash
+valska-bayeseor-validate-sweep /path/to/_sweeps/<run_id> --json
+```
 
 Aggregate audit across discovered sweeps (list + status + validate):
 
-    valska-bayeseor-sweep-audit
+```bash
+valska-bayeseor-sweep-audit
+```
 
 Filter and machine-readable output:
 
-    valska-bayeseor-sweep-audit --beam airy --sky GSM_plus_GLEAM --json
+```bash
+valska-bayeseor-sweep-audit --beam airy_diam14m --sky GSM_plus_GLEAM --json
+```
 
 Fail non-zero when any audited sweep is invalid:
 
-    valska-bayeseor-sweep-audit --fail-on-invalid
+```bash
+valska-bayeseor-sweep-audit --fail-on-invalid
+```
 
 ### Wrapper defaults
 
@@ -182,18 +391,22 @@ The wrapper now enables by default:
 
 Opt out of extended outputs if needed:
 
-    bash_scripts/valska-bayeseor-report-sweep.sh \
-      --sweep-dir /path/to/_sweeps/<run_id> \
-      --no-plot-analysis-results \
-      --no-complete-analysis-table
+```bash
+bash_scripts/valska-bayeseor-report-sweep.sh \
+  --sweep-dir /path/to/_sweeps/<run_id> \
+  --no-plot-analysis-results \
+  --no-complete-analysis-table
+```
 
 Skip all plotting:
 
-    bash_scripts/valska-bayeseor-report-sweep.sh \
-      --sweep-dir /path/to/_sweeps/<run_id> \
-      --no-plots
+```bash
+bash_scripts/valska-bayeseor-report-sweep.sh \
+  --sweep-dir /path/to/_sweeps/<run_id> \
+  --no-plots
+```
 
-### Environment fallback behavior
+### Environment fallback behaviour
 
 The wrapper will:
 
@@ -202,7 +415,9 @@ The wrapper will:
 
 Set the conda env name with:
 
-    export VALSKA_CONDA_ENV=valska
+```bash
+export VALSKA_CONDA_ENV=valska
+```
 
 ---
 

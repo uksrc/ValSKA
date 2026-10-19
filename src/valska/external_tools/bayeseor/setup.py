@@ -233,23 +233,13 @@ def prepare_bayeseor_commands(
     *,
     runner: CondaRunner | ContainerRunner,
     install: BayesEoRInstall,
-    config_yaml: Path,
+    config_yaml: Path | str,
     mode: str = "cpu",
-) -> tuple[str, str]:
+) -> str:
     """Sets up the commands to run BayesEoR which will be added to the Slurm script."""
 
     # Where is BayesEoR's entrypoint script?
     run_py = install.install_path / install.run_script
-
-    # -------------------------
-    # Runner prefix (conda now)
-    # -------------------------
-    if isinstance(runner, CondaRunner):
-        prefix = runner.bash_prefix()
-        python_exe = "python"
-    else:
-        prefix = ""
-        python_exe = "python  # TODO: container exec wrapper"
 
     # -------------------------
     # BayesEoR args by stage
@@ -259,11 +249,9 @@ def prepare_bayeseor_commands(
     else:
         stage_flags = "--gpu --run"
 
-    run_command = (
-        f'{python_exe} -u "{run_py}" --config "{config_yaml}" {stage_flags}'
-    )
+    run_command = f'{runner.python_exe} -u "{run_py}" --config "{config_yaml}" {stage_flags}'
 
-    return prefix, run_command
+    return run_command
 
 
 # -----------------------------------------------------------------------------
@@ -289,6 +277,8 @@ def prepare_bayeseor_run(
     run_id: str = "default",
     variant: str | None = None,
     unique: bool = False,
+    data_path_source: str | None = None,
+    data_root_key: str | None = None,
     fwhm_perturb_frac: float | None = None,
     antenna_diameter_perturb_frac: float | None = None,
     hypothesis: str = "both",
@@ -413,7 +403,7 @@ def prepare_bayeseor_run(
         mode = "gpu_run"
 
         # Produce BayesEoR command
-        bayeseor_commands = prepare_bayeseor_commands(
+        bayeseor_command = prepare_bayeseor_commands(
             runner=runner,
             install=install,
             config_yaml=config_yaml,
@@ -427,7 +417,8 @@ def prepare_bayeseor_run(
                 run_dir=run_dir,
                 slurm=slurm_gpu,
                 mode=mode,
-                commands=bayeseor_commands,
+                command=bayeseor_command,
+                runner=runner,
                 tool_name=TOOL_NAME,
             ),
             encoding="utf-8",
@@ -459,7 +450,8 @@ def prepare_bayeseor_run(
             run_dir=run_dir,
             slurm=slurm_cpu,
             mode="cpu",
-            commands=bayeseor_commands,
+            command=bayeseor_commands,
+            runner=runner,
             tool_name=TOOL_NAME,
         ),
         encoding="utf-8",
@@ -482,6 +474,8 @@ def prepare_bayeseor_run(
         "template_yaml": str(template_yaml),
         "template_name": template_yaml.name,
         "data_path": str(data_path),
+        "data_path_source": data_path_source,
+        "data_root_key": data_root_key,
         "overrides": overrides,
         "hypothesis": hypothesis,
         "slurm": {"cpu": dict(slurm_cpu or {}), "gpu": dict(slurm_gpu or {})},

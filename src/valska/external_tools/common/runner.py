@@ -30,9 +30,14 @@ class CondaRunner:
     )
     env_name: str  # e.g. "bayeseor"
 
+    @property
     def bash_prefix(self) -> str:
         """Return shell lines to activate the conda environment."""
         return f"{self.conda_activate}\nconda activate {self.env_name}\n"
+
+    @property
+    def python_exe(self) -> str:
+        return "python"
 
 
 @dataclass(frozen=True)
@@ -51,3 +56,11 @@ class ContainerRunner:
     apptainer_exe: str  # "apptainer" or "singularity"
     image_path: Path
     bind_paths: tuple[Path, ...] = ()
+
+    @property
+    def bash_prefix(self) -> str:
+        return ""
+
+    @property
+    def python_exe(self) -> str:
+        return "python  # TODO: container exec wrapper"

@@ -72,7 +72,7 @@ def _bool_status(*, chain_exists: bool, stats_exists: bool) -> str:
 
 
 def inspect_sweep_health(sweep_dir: Path) -> SweepHealth:
-    """Inspect a sweep directory and summarize point/sweep health."""
+    """Inspect a sweep directory and summarise point/sweep health."""
     sweep_dir = Path(sweep_dir).expanduser().resolve()
     manifest_path = sweep_dir / "sweep_manifest.json"
     if not manifest_path.exists():
