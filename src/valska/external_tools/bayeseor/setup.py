@@ -10,18 +10,14 @@ from typing import Any
 
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.common.slurm import render_submit_script
+from valska.external_tools.common.utils import utc_now_compact
 from valska.utils_yaml import dump_yaml, load_yaml
 
 from ... import __version__
+from ..common.runner import CondaRunner, ContainerRunner
 from . import TOOL_NAME
-from .runner import BayesEoRInstall, CondaRunner, ContainerRunner
-from .slurm import render_submit_script
-
-
-def _utc_stamp() -> str:
-    """Return a UTC timestamp suitable for directory naming."""
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-
 
 # -----------------------------------------------------------------------------
 # YAML IO (ruamel.yaml)
@@ -233,6 +229,31 @@ def _runner_manifest(runner: CondaRunner | ContainerRunner) -> dict[str, Any]:
     }
 
 
+def prepare_bayeseor_commands(
+    *,
+    runner: CondaRunner | ContainerRunner,
+    install: BayesEoRInstall,
+    config_yaml: Path | str,
+    mode: str = "cpu",
+) -> str:
+    """Sets up the commands to run BayesEoR which will be added to the Slurm script."""
+
+    # Where is BayesEoR's entrypoint script?
+    run_py = install.install_path / install.run_script
+
+    # -------------------------
+    # BayesEoR args by stage
+    # -------------------------
+    if mode == "cpu":
+        stage_flags = "--cpu"
+    else:
+        stage_flags = "--gpu --run"
+
+    run_command = f'{runner.python_exe} -u "{run_py}" --config "{config_yaml}" {stage_flags}'
+
+    return run_command
+
+
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
@@ -330,7 +351,7 @@ def prepare_bayeseor_run(
             / run_label
             / run_id
         )
-        run_dir = base_dir / _utc_stamp() if unique else base_dir
+        run_dir = base_dir / utc_now_compact() if unique else base_dir
     else:
         run_dir = Path(run_dir).expanduser().resolve()
 
@@ -379,15 +400,26 @@ def prepare_bayeseor_run(
         config_yaml = run_dir / f"config_{hyp}.yaml"
         dump_yaml(hyp_cfg, config_yaml)
 
+        mode = "gpu_run"
+
+        # Produce BayesEoR command
+        bayeseor_command = prepare_bayeseor_commands(
+            runner=runner,
+            install=install,
+            config_yaml=config_yaml,
+            mode=mode,
+        )
+
         submit_gpu = run_dir / f"submit_{hyp}_gpu_run.sh"
         submit_gpu.write_text(
             render_submit_script(
-                runner=runner,
-                install=install,
                 config_yaml=config_yaml,
                 run_dir=run_dir,
                 slurm=slurm_gpu,
-                mode="gpu_run",
+                mode=mode,
+                command=bayeseor_command,
+                runner=runner,
+                tool_name=TOOL_NAME,
             ),
             encoding="utf-8",
         )
@@ -400,15 +432,27 @@ def prepare_bayeseor_run(
     cpu_config_yaml = outputs[
         f"config_yaml_{cpu_precompute_driver_hypothesis}"
     ]
+
+    mode = "cpu"
+
+    # Produce BayesEoR command
+    bayeseor_commands = prepare_bayeseor_commands(
+        runner=runner,
+        install=install,
+        config_yaml=cpu_config_yaml,
+        mode=mode,
+    )
+
     submit_cpu = run_dir / "submit_cpu_precompute.sh"
     submit_cpu.write_text(
         render_submit_script(
-            runner=runner,
-            install=install,
             config_yaml=cpu_config_yaml,
             run_dir=run_dir,
             slurm=slurm_cpu,
             mode="cpu",
+            command=bayeseor_commands,
+            runner=runner,
+            tool_name=TOOL_NAME,
         ),
         encoding="utf-8",
     )
@@ -417,7 +461,7 @@ def prepare_bayeseor_run(
 
     # Manifest
     manifest = {
-        "tool": TOOL_NAME,
+        "tool": TOOL_NAME.lower(),
         "created_utc": datetime.now(UTC).isoformat(),
         "valska_version": __version__,
         "beam_model": beam_model,
@@ -437,7 +481,7 @@ def prepare_bayeseor_run(
         "slurm": {"cpu": dict(slurm_cpu or {}), "gpu": dict(slurm_gpu or {})},
         "bayeseor": {
             "install": {
-                "repo_path": str(install.repo_path),
+                "repo_path": str(install.install_path),
                 "run_script": str(install.run_script),
             },
             "runner": _runner_manifest(runner),

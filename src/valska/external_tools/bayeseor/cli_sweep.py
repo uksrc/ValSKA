@@ -14,10 +14,10 @@ from valska.cli_format import (
     resolve_color_mode,
 )
 from valska.external_tools.bayeseor import (
-    BayesEoRInstall,
     CondaRunner,
     get_template_path,
 )
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
 from valska.utils import (
     get_default_path_manager,
     resolve_data_path_info,
@@ -970,7 +970,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    install = BayesEoRInstall(repo_path=Path(str(repo_path)).expanduser())
+    install = BayesEoRInstall(install_path=Path(str(repo_path)).expanduser())
     runner = CondaRunner(conda_activate=str(conda_sh), env_name=str(conda_env))
 
     sweep_res = run_fwhm_sweep(

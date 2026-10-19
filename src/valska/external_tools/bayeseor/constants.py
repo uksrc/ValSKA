@@ -1,4 +1,4 @@
 """Constants for the BayesEoR integration."""
 
 # Public identity for this tool integration
-TOOL_NAME = "bayeseor"
+TOOL_NAME = "BayesEoR"

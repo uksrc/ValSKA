@@ -35,6 +35,7 @@ from valska.external_tools.bayeseor import (
     cli_sweep,
 )
 from valska.external_tools.bayeseor import submit as submit_mod
+from valska.external_tools.common.submit import SbatchError
 
 
 def _write_minimal_manifest(run_dir: Path) -> None:
@@ -665,10 +666,10 @@ def test_cli_submit_sbatch_failure_returns_4(tmp_path, monkeypatch):
 
     def _raise_sbatch(*_args, **_kwargs):
         # Emulate a scheduler failure (sbatch error)
-        raise submit_mod.SbatchError("boom")
+        raise SbatchError("boom")
 
     # Replace the real sbatch invocation with the failing stub. Tests should
     # observe that the CLI returns the expected failure code (4).
-    monkeypatch.setattr(submit_mod, "_run_sbatch", _raise_sbatch)
+    monkeypatch.setattr(submit_mod, "run_sbatch", _raise_sbatch)
     code = cli_submit.main([str(run_dir), "--stage", "cpu"])
     assert code == 4

@@ -2,218 +2,295 @@
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-_STAGE = Literal["cpu", "gpu", "all"]
-_HYP = Literal["signal_fit", "no_signal", "both"]
-_RECORD = Literal["jobs.json", "manifest"]
+from valska.external_tools.common.submit import (
+    InvalidArgumentError,
+    JobsFile,
+    MissingDependencyError,
+    RunOptions,
+    Stage,
+    StageType,
+    SubmitPlan,
+    ensure_script_exists,
+    get_path_from_artefacts,
+    run_sbatch,
+)
 
-_JOBID_RE = re.compile(r"Submitted\s+batch\s+job\s+(\d+)\s*$", re.IGNORECASE)
 _AFTEROK_RE = re.compile(r"afterok:(\d+)")
 _CPU_MATRIX_MARKERS: dict[str, tuple[str, ...]] = {
     "Ninv": ("Ninv.h5", "Ninv.npz"),
     "T_Ninv_T": ("T_Ninv_T.h5", "T_Ninv_T.npz"),
 }
 
-
-class SubmissionError(RuntimeError):
-    """Raised when submission cannot proceed safely or sbatch fails."""
+_HYP = Literal["signal_fit", "no_signal", "both"]
 
 
-class InvalidArgumentError(SubmissionError):
-    """Raised when CLI arguments are invalid for submission."""
+class BayesEoRStage(Stage):
+    """Inherits the Stage class which contains info about a stage and points to the setup method"""
 
 
-class MissingDependencyError(SubmissionError):
-    """Raised when required inputs or artefacts are missing."""
+class BayesEoRStageType(StageType):
+    @staticmethod
+    def cpu_precompute_setup(
+        plan: BayesEoRSubmitPlan,
+        result: dict[str, Any],
+    ):
+        ensure_script_exists(plan.cpu_script, "CPU precompute")
+
+        jobs = result.get("jobs") or {"jobs": {}}
+
+        # --------------------
+        # CPU submission
+        # --------------------
+        jobid, cmd = run_sbatch(
+            plan.cpu_script,
+            dependency_afterok=None,
+            sbatch_exe=plan.options.sbatch_exe,
+            cwd=plan.run_dir,
+            dry_run=plan.options.dry_run,
+        )
+        result["commands"].append(cmd)
+
+        jobs["jobs"]["cpu_precompute"] = {
+            "script": str(plan.cpu_script),
+            "job_id": jobid,
+            "cpu_precompute_driver_hypothesis": plan.cpu_precompute_driver_hypothesis,
+        }
+        result["jobs"] = jobs
+
+        return result, jobid, cmd
+
+    @staticmethod
+    def gpu_setup(
+        plan: BayesEoRSubmitPlan,
+        result: dict[str, Any],
+    ):
+        # --------------------
+        # GPU submission
+        # --------------------
+
+        jobs = result.get("jobs") or {"jobs": {}}
+
+        cpu_jobs = jobs.get("jobs") or {}
+        cpu_job = cpu_jobs.get("cpu_precompute")
+
+        cpu_jobid = (
+            cpu_job.get("job_id", "") if isinstance(cpu_job, dict) else ""
+        )
+
+        dep: str | None = None
+        dependency_source: str | None = None
+        verified_matrix_dir: Path | None = None
+
+        # First check whether stage=all - this means CPU and GPU were submitted
+        # together and GPU should depend on CPU with ID as recorded in jobs.json
+        if plan.stage_id == "all" and cpu_jobid:
+            dep = cpu_jobid
+            dependency_source = "same_invocation_cpu"
+        # Otherwise check for explicit dependency with manually entered CPU ID
+        elif plan.options.depend_afterok is not None:
+            dep = _safe_int_jobid(plan.options.depend_afterok)
+            if dep is None:
+                raise InvalidArgumentError(
+                    "--depend-afterok must be a numeric SLURM job id."
+                )
+            dependency_source = "explicit_depend_afterok"
+        elif plan.options.dry_run and plan.stage_id == "all":
+            dep = "<CPU_JOBID>"
+            dependency_source = "dry_run_placeholder"
+        # Otherwise CPU job must have been submitted separately before GPU
+        else:
+            verified_matrix_dir = _find_completed_cpu_precompute_matrix_dir(
+                plan.run_dir
+            )
+            # Either it could have finished already, in which case outputs will be
+            # available
+            if verified_matrix_dir is not None:
+                dependency_source = "cpu_precompute_outputs_verified"
+            # OR it could still be running - in that case, depend on its job ID
+            else:
+                dep = _extract_cpu_jobid_from_existing(plan.load_jobs())
+                if dep is not None:
+                    dependency_source = "jobs_json"
+
+        if dep is None:
+            if verified_matrix_dir is None:
+                raise MissingDependencyError(
+                    "GPU submission requested but neither a reusable CPU dependency "
+                    "job id nor completed CPU precompute outputs are available. "
+                    "Either submit CPU in the same invocation (--stage all), "
+                    "or pass --depend-afterok <JOBID>, "
+                    "or ensure jobs.json exists with a recorded cpu_precompute.job_id "
+                    "(or an existing jobs.gpu.dependency like 'afterok:<JOBID>'), "
+                    "or rerun CPU so BayesEoR writes the required matrix stack under "
+                    "run_dir/matrices/."
+                )
+
+        gpu_jobs: dict[str, Any] = {
+            "dependency": f"afterok:{dep}" if dep is not None else None,
+            "dependency_source": dependency_source,
+        }
+        if verified_matrix_dir is not None:
+            gpu_jobs["cpu_precompute_matrix_dir"] = str(verified_matrix_dir)
+
+        if plan.options.hypothesis in ("signal_fit", "both"):
+            if plan.gpu_signal_fit_script is None:
+                raise MissingDependencyError(
+                    "manifest does not contain a signal_fit GPU submit script artefact "
+                    "(submit_sh_signal_fit_gpu_run)."
+                )
+            ensure_script_exists(plan.gpu_signal_fit_script, "signal_fit GPU")
+            jobid, cmd = run_sbatch(
+                plan.gpu_signal_fit_script,
+                dependency_afterok=dep,
+                sbatch_exe=plan.options.sbatch_exe,
+                cwd=plan.run_dir,
+                dry_run=plan.options.dry_run,
+            )
+            result["commands"].append(cmd)
+            gpu_jobs["signal_fit"] = {
+                "script": str(plan.gpu_signal_fit_script),
+                "job_id": jobid,
+            }
+
+        if plan.options.hypothesis in ("no_signal", "both"):
+            if plan.gpu_no_signal_script is None:
+                raise MissingDependencyError(
+                    "manifest does not contain a no_signal GPU submit script artefact "
+                    "(submit_sh_no_signal_gpu_run)."
+                )
+            ensure_script_exists(plan.gpu_no_signal_script, "no_signal GPU")
+            jobid, cmd = run_sbatch(
+                plan.gpu_no_signal_script,
+                dependency_afterok=dep,
+                sbatch_exe=plan.options.sbatch_exe,
+                cwd=plan.run_dir,
+                dry_run=plan.options.dry_run,
+            )
+            result["commands"].append(cmd)
+            gpu_jobs["no_signal"] = {
+                "script": str(plan.gpu_no_signal_script),
+                "job_id": jobid,
+            }
+
+        jobs["jobs"]["gpu"] = gpu_jobs
+        result["jobs"] = jobs
+
+        return result, jobid, cmd
+
+    CPU = BayesEoRStage(name="cpu_precompute", method=cpu_precompute_setup)
+    GPU = BayesEoRStage(name="gpu", method=gpu_setup)
 
 
-class SbatchError(SubmissionError):
-    """Raised when sbatch fails or returns unparseable output."""
+class BayesEoRJobsFile(JobsFile):
+    extra_fields = [("hypothesis", "")]
 
 
-@dataclass(frozen=True)
-class SubmitPlan:
+@dataclass
+class BayesEoRRunOptions(RunOptions):
+    hypothesis: _HYP = "both"
+
+
+@dataclass()
+class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
     """Resolved paths needed to submit a prepared BayesEoR run."""
 
-    run_dir: Path
-    manifest_path: Path
-    cpu_script: Path
-    gpu_signal_fit_script: Path | None
-    gpu_no_signal_script: Path | None
-    cpu_precompute_driver_hypothesis: str | None
+    cpu_script: Path = field(init=False)
+    gpu_signal_fit_script: Path | None = field(init=False)
+    gpu_no_signal_script: Path | None = field(init=False)
+    cpu_precompute_driver_hypothesis: str | None = field(init=False)
 
+    def __post_init__(self):
+        super().__post_init__()
 
-def _utc_now_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.requested_stages = self.resolve_stages(self.stage_id)
 
+        self.jobs_file = BayesEoRJobsFile()
 
-def load_manifest(run_dir: Path) -> dict[str, Any]:
-    """
-    Load and parse manifest.json from a prepared run directory.
+        artefacts = self.load_manifest().get("artefacts", {})
+        if not isinstance(artefacts, dict):
+            raise MissingDependencyError(
+                "manifest['artefacts'] is missing or not a dict"
+            )
 
-    Parameters
-    ----------
-    run_dir
-        Prepared run directory containing manifest.json.
-
-    Returns
-    -------
-    dict
-        Parsed manifest content.
-    """
-    manifest_path = run_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise MissingDependencyError(
-            f"Missing manifest.json in run_dir: {run_dir}"
+        cpu_script = get_path_from_artefacts(
+            artefacts, "submit_sh_cpu_precompute", required=True
         )
-    try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
-    except Exception as e:  # pragma: no cover
-        raise MissingDependencyError(
-            f"Failed to parse manifest.json: {manifest_path}\n{e}"
-        ) from e
-
-
-def build_submit_plan(run_dir: Path) -> SubmitPlan:
-    """
-    Create a submission plan from an existing prepared run_dir.
-
-    This reads manifest.json and uses manifest['artefacts'] paths rather than guessing filenames.
-    """
-    run_dir = Path(run_dir).expanduser().resolve()
-    manifest_path = run_dir / "manifest.json"
-    manifest = load_manifest(run_dir)
-
-    artefacts = manifest.get("artefacts", {})
-    if not isinstance(artefacts, dict):
-        raise MissingDependencyError(
-            "manifest['artefacts'] is missing or not a dict"
+        gpu_signal = get_path_from_artefacts(
+            artefacts, "submit_sh_signal_fit_gpu_run", required=False
+        )
+        gpu_nosig = get_path_from_artefacts(
+            artefacts, "submit_sh_no_signal_gpu_run", required=False
         )
 
-    def _get_path(key: str, required: bool = True) -> Path | None:
-        p = artefacts.get(key)
-        if p is None:
-            if required:
-                raise MissingDependencyError(
-                    f"manifest artefact missing required key: {key}"
-                )
-            return None
-        return Path(str(p)).expanduser()
-
-    cpu_script = _get_path("submit_sh_cpu_precompute", required=True)
-    gpu_signal = _get_path("submit_sh_signal_fit_gpu_run", required=False)
-    gpu_nosig = _get_path("submit_sh_no_signal_gpu_run", required=False)
-
-    cpu_driver = (
-        manifest.get("bayeseor", {}).get(
-            "cpu_precompute_driver_hypothesis", None
-        )
-        if isinstance(manifest.get("bayeseor", {}), dict)
-        else None
-    )
-
-    def _normalise(p: Path | None) -> Path | None:
-        if p is None:
-            return None
-        return (run_dir / p).resolve() if not p.is_absolute() else p.resolve()
-
-    cpu_script = _normalise(cpu_script)  # type: ignore[assignment]
-    gpu_signal = _normalise(gpu_signal)
-    gpu_nosig = _normalise(gpu_nosig)
-
-    return SubmitPlan(
-        run_dir=run_dir,
-        manifest_path=manifest_path,
-        cpu_script=cpu_script,  # type: ignore[arg-type]
-        gpu_signal_fit_script=gpu_signal,
-        gpu_no_signal_script=gpu_nosig,
-        cpu_precompute_driver_hypothesis=str(cpu_driver)
-        if cpu_driver is not None
-        else None,
-    )
-
-
-def _ensure_script_exists(path: Path, label: str) -> None:
-    if not path.exists():
-        raise MissingDependencyError(f"Missing {label} script: {path}")
-    if not path.is_file():
-        raise MissingDependencyError(f"{label} script is not a file: {path}")
-
-
-def _run_sbatch(
-    script: Path,
-    *,
-    dependency_afterok: str | None = None,
-    sbatch_exe: str = "sbatch",
-    cwd: Path | None = None,
-    dry_run: bool = False,
-) -> tuple[str | None, str]:
-    """
-    Returns (job_id, command_str). If dry_run=True, job_id is None.
-    """
-    cmd: list[str] = [sbatch_exe]
-    if dependency_afterok:
-        cmd.append(f"--dependency=afterok:{dependency_afterok}")
-    cmd.append(str(script))
-
-    cmd_str = " ".join(cmd)
-
-    if dry_run:
-        return None, cmd_str
-
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd is not None else None,
-        capture_output=True,
-        text=True,
-    )
-
-    out = (proc.stdout or "").strip()
-    err = (proc.stderr or "").strip()
-
-    if proc.returncode != 0:
-        raise SbatchError(
-            "sbatch failed.\n"
-            f"Command: {cmd_str}\n"
-            f"Return code: {proc.returncode}\n"
-            f"stdout:\n{out}\n"
-            f"stderr:\n{err}\n"
+        self.cpu_precompute_driver_hypothesis = (
+            self.load_manifest()
+            .get("bayeseor", {})
+            .get("cpu_precompute_driver_hypothesis", None)
+            if isinstance(self.load_manifest().get("bayeseor", {}), dict)
+            else None
         )
 
-    m = _JOBID_RE.search(out)
-    if not m:
-        raise SbatchError(
-            "Could not parse job id from sbatch stdout.\n"
-            f"Command: {cmd_str}\n"
-            f"stdout:\n{out}\n"
-            f"stderr:\n{err}\n"
-        )
+        self.cpu_script = self.normalise_path(cpu_script)  # type: ignore[assignment]
+        self.gpu_signal_fit_script = self.normalise_path(gpu_signal)
+        self.gpu_no_signal_script = self.normalise_path(gpu_nosig)
 
-    return m.group(1), cmd_str
+    def resolve_stages(self, stage: str) -> list[Stage]:
+        """Resolve BayesEoR stages"""
 
+        # These are the possible stages for this module
+        stages = {
+            "cpu": [BayesEoRStageType.CPU],
+            "gpu": [BayesEoRStageType.GPU],
+            "all": [BayesEoRStageType.CPU, BayesEoRStageType.GPU],
+        }
 
-def _jobs_path(run_dir: Path) -> Path:
-    return run_dir / "jobs.json"
+        try:
+            return [stage_type.value for stage_type in stages[stage]]
+        except KeyError:
+            raise InvalidArgumentError(
+                f"Unknown BayesEoR submission stage: {stage}"
+            )
 
+    def check_jobs_not_running(self, force):
+        existing_jobs = self.load_jobs()
 
-def load_jobs(run_dir: Path) -> dict[str, Any] | None:
-    p = _jobs_path(run_dir)
-    if not p.exists():
-        return None
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except Exception as e:  # pragma: no cover
-        raise SubmissionError(
-            f"Failed to parse existing jobs.json: {p}\n{e}"
-        ) from e
+        # Second-line guardrail: refuse re-submission of a stage if that stage is already recorded,
+        # unless force=True. (cli_submit.py also enforces guardrails; this protects programmatic calls.)
+        if existing_jobs is not None and not force:
+            jobs = (
+                existing_jobs.get("jobs")
+                if isinstance(existing_jobs, dict)
+                else None
+            )
+            if isinstance(jobs, dict):
+                if (
+                    BayesEoRStageType.CPU in self.requested_stages
+                    and isinstance(jobs.get("cpu_precompute"), dict)
+                    and jobs["cpu_precompute"].get("job_id")
+                ):
+                    raise InvalidArgumentError(
+                        f"CPU precompute already recorded in jobs.json for {self.run_dir}. "
+                        "Refusing to submit CPU again. Use --force or --resubmit."
+                    )
+                if (
+                    BayesEoRStageType.GPU in self.requested_stages
+                    and isinstance(jobs.get("gpu"), dict)
+                ):
+                    gpu = jobs["gpu"]
+                    sf = gpu.get("signal_fit")
+                    ns = gpu.get("no_signal")
+                    if (isinstance(sf, dict) and sf.get("job_id")) or (
+                        isinstance(ns, dict) and ns.get("job_id")
+                    ):
+                        raise InvalidArgumentError(
+                            f"GPU jobs already recorded in jobs.json for {self.run_dir}. "
+                            "Refusing to submit GPU again. Use --force or --resubmit."
+                        )
 
 
 def _safe_int_jobid(x: Any) -> str | None:
@@ -279,303 +356,3 @@ def _find_completed_cpu_precompute_matrix_dir(run_dir: Path) -> Path | None:
         return None
 
     return max(common_dirs, key=lambda p: p.stat().st_mtime)
-
-
-def _merge_jobs_record(
-    existing: dict[str, Any] | None, new_result: dict[str, Any]
-) -> dict[str, Any]:
-    """
-    Merge a new submission result into an existing jobs.json record.
-
-    - Keeps stable top-level metadata (run_dir, manifest)
-    - Updates "jobs" by stage (cpu_precompute, gpu)
-    - Appends to "history" so we don't lose what happened
-    """
-    merged: dict[str, Any] = {}
-
-    # Start from existing, then overlay stable fields from new_result
-    if isinstance(existing, dict):
-        merged.update(existing)
-
-    # Always set these from new_result to reflect latest invocation context
-    for k in ("run_dir", "manifest"):
-        if k in new_result:
-            merged[k] = new_result[k]
-
-    merged["sbatch"] = new_result.get("sbatch", merged.get("sbatch", "sbatch"))
-    merged["dry_run"] = bool(new_result.get("dry_run", False))
-
-    # Keep a full submission history (append-only)
-    hist = merged.get("history")
-    if not isinstance(hist, list):
-        hist = []
-    # store a compact record (not including any existing "history")
-    hist_entry = {k: v for k, v in new_result.items() if k != "history"}
-    hist.append(hist_entry)
-    merged["history"] = hist
-
-    # Merge jobs by stage
-    merged_jobs = merged.get("jobs")
-    if not isinstance(merged_jobs, dict):
-        merged_jobs = {}
-
-    new_jobs = new_result.get("jobs")
-    if isinstance(new_jobs, dict):
-        # CPU stage record
-        cpu = new_jobs.get("cpu_precompute")
-        if isinstance(cpu, dict):
-            merged_jobs["cpu_precompute"] = cpu
-
-        # GPU stage record
-        gpu = new_jobs.get("gpu")
-        if isinstance(gpu, dict):
-            merged_jobs["gpu"] = gpu
-
-    merged["jobs"] = merged_jobs
-
-    # Keep latest submitted timestamp and commands for convenience
-    merged["submitted_utc"] = new_result.get(
-        "submitted_utc", merged.get("submitted_utc")
-    )
-    merged["stage"] = new_result.get("stage", merged.get("stage"))
-    merged["hypothesis"] = new_result.get(
-        "hypothesis", merged.get("hypothesis")
-    )
-    merged["commands"] = new_result.get("commands", merged.get("commands", []))
-
-    return merged
-
-
-def write_jobs(run_dir: Path, jobs: dict[str, Any]) -> Path:
-    p = _jobs_path(run_dir)
-    p.write_text(json.dumps(jobs, indent=2), encoding="utf-8")
-    return p
-
-
-def submit_bayeseor_run(
-    run_dir: Path,
-    *,
-    stage: _STAGE = "all",
-    hypothesis: _HYP = "both",
-    depend_afterok: str | None = None,
-    sbatch_exe: str = "sbatch",
-    dry_run: bool = False,
-    force: bool = False,
-    record: _RECORD = "jobs.json",
-) -> dict[str, Any]:
-    """
-    Submit BayesEoR prepared scripts for a run_dir.
-
-    Parameters
-    ----------
-    run_dir
-        Prepared run directory.
-    stage
-        Which stage(s) to submit: "cpu", "gpu", or "all".
-    hypothesis
-        Which GPU hypothesis to run: "signal_fit", "no_signal", or "both".
-    depend_afterok
-        Optional sbatch job id to depend on for GPU submissions.
-    sbatch_exe
-        sbatch executable to invoke.
-    dry_run
-        If True, do not submit jobs; return the commands that would run.
-    force
-        If True, allow resubmission even if jobs.json indicates prior submissions.
-    record
-        Where to record submission metadata. Currently only "jobs.json" is supported.
-
-    Returns
-    -------
-    dict
-        A jobs.json-style record of the submission (merged if not dry_run).
-
-    Notes on jobs.json recording
-    ----------------------------
-    jobs.json is treated as a durable record that may be updated across invocations:
-      - stage=cpu creates/updates jobs.cpu_precompute
-      - stage=gpu appends/updates jobs.gpu
-      - stage=all updates both
-
-    We also keep a submission 'history' list so previous job ids are not lost.
-    """
-    plan = build_submit_plan(run_dir)
-
-    _ensure_script_exists(plan.manifest_path, "manifest.json")
-    _ensure_script_exists(plan.cpu_script, "CPU precompute")
-
-    if record == "manifest":
-        raise InvalidArgumentError(
-            "record='manifest' is not enabled in the MVP to avoid mutating provenance. "
-            "Use record='jobs.json' (default)."
-        )
-
-    existing_jobs = load_jobs(plan.run_dir)
-
-    # Second-line guardrail: refuse re-submission of a stage if that stage is already recorded,
-    # unless force=True. (cli_submit.py also enforces guardrails; this protects programmatic calls.)
-    if existing_jobs is not None and not force:
-        jobs = (
-            existing_jobs.get("jobs")
-            if isinstance(existing_jobs, dict)
-            else None
-        )
-        if isinstance(jobs, dict):
-            if (
-                stage in ("cpu", "all")
-                and isinstance(jobs.get("cpu_precompute"), dict)
-                and jobs["cpu_precompute"].get("job_id")
-            ):
-                raise InvalidArgumentError(
-                    f"CPU precompute already recorded in jobs.json for {plan.run_dir}. "
-                    "Refusing to submit CPU again. Use --force or --resubmit."
-                )
-            if stage in ("gpu", "all") and isinstance(jobs.get("gpu"), dict):
-                gpu = jobs["gpu"]
-                sf = gpu.get("signal_fit")
-                ns = gpu.get("no_signal")
-                if (isinstance(sf, dict) and sf.get("job_id")) or (
-                    isinstance(ns, dict) and ns.get("job_id")
-                ):
-                    raise InvalidArgumentError(
-                        f"GPU jobs already recorded in jobs.json for {plan.run_dir}. "
-                        "Refusing to submit GPU again. Use --force or --resubmit."
-                    )
-
-    result: dict[str, Any] = {
-        "run_dir": str(plan.run_dir),
-        "manifest": str(plan.manifest_path),
-        "submitted_utc": _utc_now_iso(),
-        "sbatch": sbatch_exe,
-        "dry_run": bool(dry_run),
-        "stage": stage,
-        "hypothesis": hypothesis,
-        "commands": [],
-        "jobs": {},
-    }
-
-    cpu_jobid: str | None = None
-
-    # --------------------
-    # CPU submission
-    # --------------------
-    if stage in ("cpu", "all"):
-        jobid, cmd = _run_sbatch(
-            plan.cpu_script,
-            dependency_afterok=None,
-            sbatch_exe=sbatch_exe,
-            cwd=plan.run_dir,
-            dry_run=dry_run,
-        )
-        result["commands"].append(cmd)
-        result["jobs"]["cpu_precompute"] = {
-            "script": str(plan.cpu_script),
-            "job_id": jobid,
-            "cpu_precompute_driver_hypothesis": plan.cpu_precompute_driver_hypothesis,
-        }
-        cpu_jobid = jobid
-
-    # --------------------
-    # GPU submission
-    # --------------------
-    if stage in ("gpu", "all"):
-        dep: str | None = None
-        dependency_source: str | None = None
-        verified_matrix_dir: Path | None = None
-
-        if cpu_jobid:
-            dep = cpu_jobid
-            dependency_source = "same_invocation_cpu"
-        elif depend_afterok is not None:
-            dep = _safe_int_jobid(depend_afterok)
-            if dep is None:
-                raise InvalidArgumentError(
-                    "--depend-afterok must be a numeric SLURM job id."
-                )
-            dependency_source = "explicit_depend_afterok"
-        elif dry_run and stage == "all":
-            dep = "<CPU_JOBID>"
-            dependency_source = "dry_run_placeholder"
-        else:
-            verified_matrix_dir = _find_completed_cpu_precompute_matrix_dir(
-                plan.run_dir
-            )
-            if verified_matrix_dir is not None:
-                dependency_source = "cpu_precompute_outputs_verified"
-            else:
-                dep = _extract_cpu_jobid_from_existing(existing_jobs)
-                if dep is not None:
-                    dependency_source = "jobs_json"
-
-        if dep is None:
-            if verified_matrix_dir is None:
-                raise MissingDependencyError(
-                    "GPU submission requested but neither a reusable CPU dependency "
-                    "job id nor completed CPU precompute outputs are available. "
-                    "Either submit CPU in the same invocation (--stage all), "
-                    "or pass --depend-afterok <JOBID>, "
-                    "or ensure jobs.json exists with a recorded cpu_precompute.job_id "
-                    "(or an existing jobs.gpu.dependency like 'afterok:<JOBID>'), "
-                    "or rerun CPU so BayesEoR writes the required matrix stack under "
-                    "run_dir/matrices/."
-                )
-
-        gpu_jobs: dict[str, Any] = {
-            "dependency": f"afterok:{dep}" if dep is not None else None,
-            "dependency_source": dependency_source,
-        }
-        if verified_matrix_dir is not None:
-            gpu_jobs["cpu_precompute_matrix_dir"] = str(verified_matrix_dir)
-
-        if hypothesis in ("signal_fit", "both"):
-            if plan.gpu_signal_fit_script is None:
-                raise MissingDependencyError(
-                    "manifest does not contain a signal_fit GPU submit script artefact "
-                    "(submit_sh_signal_fit_gpu_run)."
-                )
-            _ensure_script_exists(plan.gpu_signal_fit_script, "signal_fit GPU")
-            jobid, cmd = _run_sbatch(
-                plan.gpu_signal_fit_script,
-                dependency_afterok=dep,
-                sbatch_exe=sbatch_exe,
-                cwd=plan.run_dir,
-                dry_run=dry_run,
-            )
-            result["commands"].append(cmd)
-            gpu_jobs["signal_fit"] = {
-                "script": str(plan.gpu_signal_fit_script),
-                "job_id": jobid,
-            }
-
-        if hypothesis in ("no_signal", "both"):
-            if plan.gpu_no_signal_script is None:
-                raise MissingDependencyError(
-                    "manifest does not contain a no_signal GPU submit script artefact "
-                    "(submit_sh_no_signal_gpu_run)."
-                )
-            _ensure_script_exists(plan.gpu_no_signal_script, "no_signal GPU")
-            jobid, cmd = _run_sbatch(
-                plan.gpu_no_signal_script,
-                dependency_afterok=dep,
-                sbatch_exe=sbatch_exe,
-                cwd=plan.run_dir,
-                dry_run=dry_run,
-            )
-            result["commands"].append(cmd)
-            gpu_jobs["no_signal"] = {
-                "script": str(plan.gpu_no_signal_script),
-                "job_id": jobid,
-            }
-
-        result["jobs"]["gpu"] = gpu_jobs
-
-    # --------------------
-    # Record jobs.json (MERGE, do not overwrite)
-    # --------------------
-    if not dry_run:
-        merged = _merge_jobs_record(existing_jobs, result)
-        write_jobs(plan.run_dir, merged)
-        # Return the merged record to reflect what is now on disk
-        return merged
-
-    return result

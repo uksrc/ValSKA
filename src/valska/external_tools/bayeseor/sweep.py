@@ -7,6 +7,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from valska.external_tools.common.runner import CondaRunner, ContainerRunner
+from valska.external_tools.common.slurm import render_array_submit_script
+from valska.external_tools.common.submit import (
+    InvalidArgumentError,
+    MissingDependencyError,
+    SubmissionError,
+    run_sbatch,
+    submit_tool_run,
+)
 from valska.external_tools.common.utils import (
     archive_timestamped,
     array_spec,
@@ -18,16 +27,10 @@ from valska.external_tools.common.utils import (
     write_json_object,
 )
 
-from .runner import BayesEoRInstall, CondaRunner, ContainerRunner
-from .setup import prepare_bayeseor_run
-from .slurm import render_array_submit_script
-from .submit import (
-    InvalidArgumentError,
-    MissingDependencyError,
-    SubmissionError,
-    _run_sbatch,
-    submit_bayeseor_run,
-)
+from . import TOOL_NAME
+from .runner import BayesEoRInstall
+from .setup import prepare_bayeseor_commands, prepare_bayeseor_run
+from .submit import BayesEoRRunOptions, BayesEoRSubmitPlan
 
 _STAGE = Literal["none", "cpu", "gpu", "all"]
 _HYP = Literal["signal_fit", "no_signal", "both"]
@@ -240,11 +243,17 @@ def _render_and_write_array_scripts(
 
     cpu_script.write_text(
         render_array_submit_script(
+            command=prepare_bayeseor_commands(
+                runner=runner,
+                install=install,
+                config_yaml="$CONFIG_YAML",
+                mode="cpu",
+            ),
             runner=runner,
-            install=install,
             sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="cpu_config",
+            tool_name=TOOL_NAME,
             slurm=slurm_cpu_array,
             mode="cpu",
         ),
@@ -252,11 +261,17 @@ def _render_and_write_array_scripts(
     )
     signal_script.write_text(
         render_array_submit_script(
+            command=prepare_bayeseor_commands(
+                runner=runner,
+                install=install,
+                config_yaml="$CONFIG_YAML",
+                mode="gpu_run",
+            ),
             runner=runner,
-            install=install,
             sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="signal_fit_config",
+            tool_name=TOOL_NAME,
             slurm=slurm_gpu_array,
             mode="gpu_run",
         ),
@@ -264,11 +279,17 @@ def _render_and_write_array_scripts(
     )
     no_signal_script.write_text(
         render_array_submit_script(
+            command=prepare_bayeseor_commands(
+                runner=runner,
+                install=install,
+                config_yaml="$CONFIG_YAML",
+                mode="gpu_run",
+            ),
             runner=runner,
-            install=install,
             sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="no_signal_config",
+            tool_name=TOOL_NAME,
             slurm=slurm_gpu_array,
             mode="gpu_run",
         ),
@@ -366,7 +387,7 @@ def _submit_sweep_array(
 
     cpu_jobid: str | None = None
     if submit in ("cpu", "all"):
-        cpu_jobid, cmd = _run_sbatch(
+        cpu_jobid, cmd = run_sbatch(
             scripts["cpu"],
             sbatch_exe=sbatch_exe,
             cwd=sweep_dir,
@@ -419,7 +440,7 @@ def _submit_sweep_array(
         }
 
         if hypothesis in ("signal_fit", "both"):
-            jobid, cmd = _run_sbatch(
+            jobid, cmd = run_sbatch(
                 scripts["signal_fit"],
                 dependency_afterok=dep,
                 sbatch_exe=sbatch_exe,
@@ -438,7 +459,7 @@ def _submit_sweep_array(
             }
 
         if hypothesis in ("no_signal", "both"):
-            jobid, cmd = _run_sbatch(
+            jobid, cmd = run_sbatch(
                 scripts["no_signal"],
                 dependency_afterok=dep,
                 sbatch_exe=sbatch_exe,
@@ -935,15 +956,18 @@ def run_fwhm_sweep(
                 try:
                     submit_force = bool(force or resubmit)
 
-                    res = submit_bayeseor_run(
+                    res = submit_tool_run(
                         p.run_dir,
-                        stage="all" if submit == "all" else submit,  # type: ignore[arg-type]
-                        hypothesis=hypothesis,
-                        depend_afterok=depend_afterok,
-                        sbatch_exe=sbatch_exe,
-                        dry_run=submit_dry_run,
-                        force=submit_force,
-                        record=record,
+                        stage_id="all" if submit == "all" else submit,  # type: ignore[arg-type]
+                        submit_plan=BayesEoRSubmitPlan,
+                        options=BayesEoRRunOptions(
+                            hypothesis=hypothesis,
+                            depend_afterok=depend_afterok,
+                            sbatch_exe=sbatch_exe,
+                            dry_run=submit_dry_run,
+                            force=submit_force,
+                            record=record,
+                        ),
                     )
 
                     if archived is not None:

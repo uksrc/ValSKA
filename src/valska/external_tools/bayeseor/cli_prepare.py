@@ -86,7 +86,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,21 +95,18 @@ from valska.cli_format import (
     resolve_color_mode,
 )
 from valska.external_tools.bayeseor import (
-    BayesEoRInstall,
+    # ToolInstall,
     CondaRunner,
     get_template_path,
     list_templates,
     prepare_bayeseor_run,
 )
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.common.utils import utc_now_compact
 from valska.utils import (
     get_default_path_manager,
     resolve_data_path_info,
 )
-
-
-def _utc_stamp() -> str:
-    """Return a UTC timestamp suitable for directory naming."""
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _format_run_label_from_fwhm_frac(frac: float) -> str:
@@ -174,7 +170,7 @@ def _compute_run_dir(
         / run_label
         / run_id
     )
-    return base / _utc_stamp() if unique else base
+    return base / utc_now_compact() if unique else base
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -778,7 +774,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n" + colors.success("[DRY RUN] No files will be created."))
         return 0
 
-    install = BayesEoRInstall(repo_path=Path(repo_path))
+    install = BayesEoRInstall(install_path=Path(repo_path))
     runner = CondaRunner(conda_activate=conda_sh, env_name=conda_env)
 
     out = prepare_bayeseor_run(

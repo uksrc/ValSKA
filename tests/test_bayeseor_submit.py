@@ -5,8 +5,12 @@ import pytest
 
 from valska.external_tools.bayeseor import cli_submit
 from valska.external_tools.bayeseor.submit import (
+    BayesEoRRunOptions,
+    BayesEoRSubmitPlan,
+)
+from valska.external_tools.common.submit import (
     MissingDependencyError,
-    submit_bayeseor_run,
+    submit_tool_run,
 )
 
 
@@ -55,10 +59,17 @@ def test_submit_gpu_uses_recorded_dependency_when_outputs_missing(tmp_path):
         {"jobs": {"cpu_precompute": {"job_id": "12345"}}},
     )
 
-    result = submit_bayeseor_run(run_dir, stage="gpu", dry_run=True)
+    result = submit_tool_run(
+        run_dir,
+        stage_id="gpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(dry_run=True),
+    )
 
-    assert result["jobs"]["gpu"]["dependency"] == "afterok:12345"
-    assert result["jobs"]["gpu"]["dependency_source"] == "jobs_json"
+    jobs = result.get("jobs")
+
+    assert jobs["jobs"]["gpu"]["dependency"] == "afterok:12345"
+    assert jobs["jobs"]["gpu"]["dependency_source"] == "jobs_json"
     assert "--dependency=afterok:12345" in result["commands"][0]
     assert "--dependency=afterok:12345" in result["commands"][1]
 
@@ -73,16 +84,21 @@ def test_submit_gpu_skips_dependency_when_cpu_outputs_verified(tmp_path):
         {"jobs": {"cpu_precompute": {"job_id": "12345"}}},
     )
 
-    result = submit_bayeseor_run(run_dir, stage="gpu", dry_run=True)
+    result = submit_tool_run(
+        run_dir,
+        stage_id="gpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(dry_run=True),
+    )
 
-    assert result["jobs"]["gpu"]["dependency"] is None
+    jobs = result.get("jobs")
+
+    assert jobs["jobs"]["gpu"]["dependency"] is None
     assert (
-        result["jobs"]["gpu"]["dependency_source"]
+        jobs["jobs"]["gpu"]["dependency_source"]
         == "cpu_precompute_outputs_verified"
     )
-    assert result["jobs"]["gpu"]["cpu_precompute_matrix_dir"] == str(
-        matrix_dir
-    )
+    assert jobs["jobs"]["gpu"]["cpu_precompute_matrix_dir"] == str(matrix_dir)
     assert "--dependency=" not in result["commands"][0]
     assert "--dependency=" not in result["commands"][1]
 
@@ -93,7 +109,12 @@ def test_submit_gpu_requires_dependency_or_completed_outputs(tmp_path):
     _write_submit_fixture(run_dir)
 
     with pytest.raises(MissingDependencyError):
-        submit_bayeseor_run(run_dir, stage="gpu", dry_run=True)
+        submit_tool_run(
+            run_dir,
+            stage_id="gpu",
+            submit_plan=BayesEoRSubmitPlan,
+            options=BayesEoRRunOptions(dry_run=True),
+        )
 
 
 def test_cli_submit_allows_gpu_when_completed_cpu_outputs_exist(tmp_path):

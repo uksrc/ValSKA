@@ -1,10 +1,8 @@
 from pathlib import Path
 
-from valska.external_tools.bayeseor.runner import (
-    BayesEoRInstall,
-    CondaRunner,
-)
-from valska.external_tools.bayeseor.slurm import (
+from valska.external_tools.bayeseor.constants import TOOL_NAME
+from valska.external_tools.common.runner import CondaRunner
+from valska.external_tools.common.slurm import (
     render_array_submit_script,
     render_submit_script,
 )
@@ -16,11 +14,12 @@ def _render_script(mode: str) -> str:
             conda_activate="source /opt/conda/etc/profile.d/conda.sh",
             env_name="bayeseor",
         ),
-        install=BayesEoRInstall(repo_path=Path("/opt/BayesEoR")),
         config_yaml=Path("/tmp/config.yaml"),
         run_dir=Path("/tmp/run"),
         slurm={"partition": "a100_gpu", "cpus_per_task": 4, "ntasks": 1},
         mode=mode,
+        command="sample command",
+        tool_name=TOOL_NAME,
     )
 
 
@@ -50,7 +49,7 @@ def test_render_submit_script_includes_array_directive_when_requested():
             conda_activate="source /opt/conda/etc/profile.d/conda.sh",
             env_name="bayeseor",
         ),
-        install=BayesEoRInstall(repo_path=Path("/opt/BayesEoR")),
+        command="test command",
         config_yaml=Path("/tmp/config.yaml"),
         run_dir=Path("/tmp/run"),
         slurm={
@@ -60,6 +59,7 @@ def test_render_submit_script_includes_array_directive_when_requested():
             "array": "0-10%4",
         },
         mode="cpu",
+        tool_name=TOOL_NAME,
     )
 
     assert "#SBATCH --array=0-10%4" in script
@@ -67,11 +67,11 @@ def test_render_submit_script_includes_array_directive_when_requested():
 
 def test_render_array_submit_script_includes_task_lookup_and_array_header():
     script = render_array_submit_script(
+        command="test command",
         runner=CondaRunner(
             conda_activate="source /opt/conda/etc/profile.d/conda.sh",
             env_name="bayeseor",
         ),
-        install=BayesEoRInstall(repo_path=Path("/opt/BayesEoR")),
         sweep_dir=Path("/tmp/sweep"),
         tasks_json=Path("/tmp/sweep/array_tasks.json"),
         config_key="cpu_config",
@@ -82,6 +82,7 @@ def test_render_array_submit_script_includes_task_lookup_and_array_header():
             "array": "0-10%4",
         },
         mode="cpu",
+        tool_name=TOOL_NAME,
     )
 
     assert "#SBATCH --array=0-10%4" in script
