@@ -269,6 +269,55 @@ valska-bayeseor-sweep \
   --submit-dry-run
 ```
 
+#### SLURM walltime overrides
+
+Use `--cpu-time` and `--gpu-time` to set the SLURM walltime for one sweep
+without editing `runtime_paths.yaml`:
+
+```bash
+valska-bayeseor-sweep \
+  --beam achromatic_Gaussian \
+  --sky GLEAM \
+  --data-root-key gaussian \
+  --data gsm_plus_gleam-158.30-167.10-MHz-nf-38-fov-19.4deg-circ-field-1_quentin.uvh5 \
+  --run-id SWEEP_ID \
+  --fwhm-fracs 0.01 0.0 \
+  --submit all \
+  --cpu-time 06:00:00 \
+  --gpu-time 1-00:00:00
+```
+
+- `--cpu-time` sets `#SBATCH --time` in the CPU precompute scripts, and
+  `--gpu-time` sets it in the signal-fit and no-signal GPU scripts. Both apply
+  to `--submit-mode per-point` and `--submit-mode array`.
+- For each stage, the CLI value takes precedence over
+  `bayeseor.slurm_defaults_cpu.time` or `bayeseor.slurm_defaults_gpu.time` in
+  `runtime_paths.yaml` (or `bayeseor.slurm_defaults.time` when no
+  stage-specific block is set), which in turn takes precedence over the
+  built-in default of `12:00:00`.
+- The two options are independent. Omitting one keeps that stage's configured
+  walltime, so `--gpu-time 1-00:00:00` alone changes only the GPU scripts.
+- Values use the same format as `valska-bayeseor-prepare --cpu-time` and
+  `--gpu-time` and are passed to SLURM unchanged. When setting walltimes in
+  `runtime_paths.yaml`, quote them (for example `time: "12:00:00"`), because
+  YAML can read unquoted `HH:MM:SS` values as numbers.
+- `--dry-run` reports the resolved `cpu_time` and `gpu_time`.
+
+Each sweep invocation re-renders the scripts for every point, so the
+next-step commands printed by `valska-bayeseor-sweep` repeat any explicit
+`--cpu-time` and `--gpu-time`. Keep both options when splitting CPU and GPU
+submissions across separate commands; omitting them restores the configured
+walltimes.
+
+The HERA beam case-study wrappers forward the same options:
+
+```bash
+case_studies/hera_beam/bash_scripts/valska-bayeseor-sweep-achromatic_Gaussian-GSM_v3.sh \
+  --submit all \
+  --cpu-time 06:00:00 \
+  --gpu-time 1-00:00:00
+```
+
 ### valska-bayeseor-submit --stage cpu
 
 If you are using the submit CLI:
