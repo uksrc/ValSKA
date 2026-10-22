@@ -754,23 +754,30 @@ def test_cli_sweep_walltimes_in_generated_scripts(
         assert _sbatch_times(array_scripts[name][0]) == [expected_gpu]
 
 
+@pytest.mark.parametrize("gpu_time", [None, _CLI_GPU_TIME])
 def test_cli_sweep_walltimes_fall_back_to_built_in_default(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, gpu_time
 ) -> None:
-    """Without config or CLI walltimes, the built-in SLURM default is used."""
+    """Unspecified stages use built-in walltimes when config has none."""
     runtime_yaml = _write_sweep_runtime_yaml(tmp_path, configure_times=False)
     monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
-    built_in_time = cli_prepare._slurm_defaults({}, "cpu")["time"]
-
-    code = cli_sweep.main(_sweep_argv(tmp_path, "--gpu-time", _CLI_GPU_TIME))
+    code = cli_sweep.main(
+        _sweep_argv(tmp_path, *_walltime_argv(None, gpu_time))
+    )
 
     assert code == 0
     capsys.readouterr()
     results = tmp_path / "results"
-    for script in results.rglob("submit_cpu_precompute.sh"):
-        assert _sbatch_times(script) == [built_in_time]
-    for script in results.rglob("submit_*_gpu_run.sh"):
-        assert _sbatch_times(script) == [_CLI_GPU_TIME]
+    cpu_scripts = sorted(results.rglob("submit_cpu_precompute.sh"))
+    signal_scripts = sorted(results.rglob("submit_signal_fit_gpu_run.sh"))
+    no_signal_scripts = sorted(results.rglob("submit_no_signal_gpu_run.sh"))
+    assert len(cpu_scripts) == 2
+    assert len(signal_scripts) == 2
+    assert len(no_signal_scripts) == 2
+    for script in cpu_scripts:
+        assert _sbatch_times(script) == ["12:00:00"]
+    for script in signal_scripts + no_signal_scripts:
+        assert _sbatch_times(script) == [gpu_time or "12:00:00"]
 
 
 @pytest.mark.parametrize(

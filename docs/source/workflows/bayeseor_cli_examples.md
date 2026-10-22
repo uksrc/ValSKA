@@ -277,7 +277,7 @@ without editing `runtime_paths.yaml`:
 ```bash
 valska-bayeseor-sweep \
   --beam achromatic_Gaussian \
-  --sky GLEAM \
+  --sky GSM_plus_GLEAM \
   --data-root-key gaussian \
   --data gsm_plus_gleam-158.30-167.10-MHz-nf-38-fov-19.4deg-circ-field-1_quentin.uvh5 \
   --run-id SWEEP_ID \
