@@ -25,6 +25,8 @@ Notes on testing techniques used:
 """
 
 import json
+import re
+import shlex
 from pathlib import Path
 
 import pytest
@@ -563,6 +565,251 @@ def test_cli_sweep_rejects_mismatched_perturbation_flags():
         ]
     )
     assert code == 2
+
+
+# Walltimes configured in the runtime YAML used by the sweep walltime tests.
+# Quoted in the YAML so they are not parsed as sexagesimal integers.
+_CFG_CPU_TIME = "06:00:00"
+_CFG_GPU_TIME = "18:00:00"
+_CLI_CPU_TIME = "02:30:00"
+_CLI_GPU_TIME = "1-00:00:00"
+
+
+def _write_sweep_runtime_yaml(
+    tmp_path: Path, *, configure_times: bool = True
+) -> Path:
+    """Write a runtime_paths.yaml sufficient for a real (unsubmitted) sweep."""
+    lines = [
+        f"results_root: {tmp_path / 'results'}",
+        "bayeseor:",
+        f"  repo_path: {tmp_path / 'BayesEoR'}",
+        f'  conda_sh: "source {tmp_path / "conda.sh"}"',
+        "  conda_env: bayeseor",
+    ]
+    if configure_times:
+        lines += [
+            "  slurm_defaults_cpu:",
+            f'    time: "{_CFG_CPU_TIME}"',
+            "  slurm_defaults_gpu:",
+            f'    time: "{_CFG_GPU_TIME}"',
+        ]
+    runtime_yaml = tmp_path / "runtime_paths.yaml"
+    runtime_yaml.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return runtime_yaml
+
+
+def _sweep_argv(tmp_path: Path, *extra: str) -> list[str]:
+    return [
+        "--beam",
+        "airy",
+        "--sky",
+        "GLEAM_plus_GSM",
+        "--data",
+        str(tmp_path / "input.uvh5"),
+        "--run-id",
+        "r001",
+        "--fwhm-fracs",
+        "0.0",
+        "0.01",
+        *extra,
+    ]
+
+
+def _walltime_argv(cpu_time: str | None, gpu_time: str | None) -> list[str]:
+    argv: list[str] = []
+    if cpu_time is not None:
+        argv += ["--cpu-time", cpu_time]
+    if gpu_time is not None:
+        argv += ["--gpu-time", gpu_time]
+    return argv
+
+
+def _sbatch_times(script: Path) -> list[str]:
+    return re.findall(
+        r"^#SBATCH --time=(.*)$",
+        script.read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+
+
+def _option_value(tokens: list[str], option: str) -> str | None:
+    if option not in tokens:
+        return None
+    return tokens[tokens.index(option) + 1]
+
+
+def test_cli_sweep_help_lists_walltime_options(capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli_sweep.main(["--help"])
+
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--cpu-time" in out
+    assert "--gpu-time" in out
+
+
+def test_cli_sweep_parses_walltime_options() -> None:
+    parser = cli_sweep.build_parser()
+
+    args = parser.parse_args(
+        _sweep_argv(Path("."), *_walltime_argv(_CLI_CPU_TIME, _CLI_GPU_TIME))
+    )
+    assert args.cpu_time == _CLI_CPU_TIME
+    assert args.gpu_time == _CLI_GPU_TIME
+
+    args = parser.parse_args(_sweep_argv(Path(".")))
+    assert args.cpu_time is None
+    assert args.gpu_time is None
+
+
+@pytest.mark.parametrize(
+    ("cpu_time", "gpu_time"),
+    [
+        (None, None),
+        (_CLI_CPU_TIME, None),
+        (None, _CLI_GPU_TIME),
+        (_CLI_CPU_TIME, _CLI_GPU_TIME),
+    ],
+)
+def test_cli_sweep_dry_run_reports_walltimes(
+    tmp_path, monkeypatch, capsys, cpu_time, gpu_time
+) -> None:
+    """CLI walltimes override runtime_paths.yaml independently per stage."""
+    runtime_yaml = _write_sweep_runtime_yaml(tmp_path)
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_sweep.main(
+        _sweep_argv(tmp_path, "--dry-run", *_walltime_argv(cpu_time, gpu_time))
+    )
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert f"cpu_time:     {cpu_time or _CFG_CPU_TIME}" in out
+    assert f"gpu_time:     {gpu_time or _CFG_GPU_TIME}" in out
+
+
+@pytest.mark.parametrize("submit_mode", ["per-point", "array"])
+@pytest.mark.parametrize(
+    ("cpu_time", "gpu_time"),
+    [
+        (None, None),
+        (_CLI_CPU_TIME, None),
+        (None, _CLI_GPU_TIME),
+        (_CLI_CPU_TIME, _CLI_GPU_TIME),
+    ],
+)
+def test_cli_sweep_walltimes_in_generated_scripts(
+    tmp_path, monkeypatch, capsys, submit_mode, cpu_time, gpu_time
+) -> None:
+    """Generated per-point and array scripts carry the resolved walltimes."""
+    runtime_yaml = _write_sweep_runtime_yaml(tmp_path)
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_sweep.main(
+        _sweep_argv(
+            tmp_path,
+            "--submit-mode",
+            submit_mode,
+            *_walltime_argv(cpu_time, gpu_time),
+        )
+    )
+
+    assert code == 0
+    capsys.readouterr()
+    expected_cpu = cpu_time or _CFG_CPU_TIME
+    expected_gpu = gpu_time or _CFG_GPU_TIME
+
+    results = tmp_path / "results"
+    cpu_scripts = sorted(results.rglob("submit_cpu_precompute.sh"))
+    gpu_scripts = sorted(results.rglob("submit_signal_fit_gpu_run.sh")) + (
+        sorted(results.rglob("submit_no_signal_gpu_run.sh"))
+    )
+    assert len(cpu_scripts) == 2
+    assert len(gpu_scripts) == 4
+    for script in cpu_scripts:
+        assert _sbatch_times(script) == [expected_cpu]
+    for script in gpu_scripts:
+        assert _sbatch_times(script) == [expected_gpu]
+
+    array_scripts = {
+        name: sorted(results.rglob(name))
+        for name in (
+            "submit_cpu_precompute_array.sh",
+            "submit_signal_fit_gpu_array.sh",
+            "submit_no_signal_gpu_array.sh",
+        )
+    }
+    if submit_mode == "per-point":
+        assert all(not found for found in array_scripts.values())
+        return
+
+    assert all(len(found) == 1 for found in array_scripts.values())
+    assert _sbatch_times(
+        array_scripts["submit_cpu_precompute_array.sh"][0]
+    ) == [expected_cpu]
+    for name in (
+        "submit_signal_fit_gpu_array.sh",
+        "submit_no_signal_gpu_array.sh",
+    ):
+        assert _sbatch_times(array_scripts[name][0]) == [expected_gpu]
+
+
+def test_cli_sweep_walltimes_fall_back_to_built_in_default(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """Without config or CLI walltimes, the built-in SLURM default is used."""
+    runtime_yaml = _write_sweep_runtime_yaml(tmp_path, configure_times=False)
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+    built_in_time = cli_prepare._slurm_defaults({}, "cpu")["time"]
+
+    code = cli_sweep.main(_sweep_argv(tmp_path, "--gpu-time", _CLI_GPU_TIME))
+
+    assert code == 0
+    capsys.readouterr()
+    results = tmp_path / "results"
+    for script in results.rglob("submit_cpu_precompute.sh"):
+        assert _sbatch_times(script) == [built_in_time]
+    for script in results.rglob("submit_*_gpu_run.sh"):
+        assert _sbatch_times(script) == [_CLI_GPU_TIME]
+
+
+@pytest.mark.parametrize(
+    ("cpu_time", "gpu_time"),
+    [
+        (None, None),
+        (_CLI_CPU_TIME, None),
+        (None, _CLI_GPU_TIME),
+        (_CLI_CPU_TIME, _CLI_GPU_TIME),
+    ],
+)
+def test_cli_sweep_next_step_commands_preserve_walltimes(
+    tmp_path, monkeypatch, capsys, cpu_time, gpu_time
+) -> None:
+    """Printed CPU, GPU and combined commands keep explicit walltimes."""
+    runtime_yaml = _write_sweep_runtime_yaml(tmp_path)
+    monkeypatch.setenv("VALSKA_RUNTIME_PATHS_FILE", str(runtime_yaml))
+
+    code = cli_sweep.main(
+        _sweep_argv(
+            tmp_path,
+            "--submit",
+            "none",
+            *_walltime_argv(cpu_time, gpu_time),
+        )
+    )
+
+    assert code == 0
+    out = capsys.readouterr().out
+    commands = [
+        shlex.split(line)
+        for line in out.splitlines()
+        if line.strip().startswith("valska-bayeseor-sweep ")
+    ]
+    stages = [_option_value(tokens, "--submit") for tokens in commands]
+    assert stages == ["cpu", "gpu", "all"]
+    for tokens in commands:
+        assert _option_value(tokens, "--cpu-time") == cpu_time
+        assert _option_value(tokens, "--gpu-time") == gpu_time
 
 
 def test_cli_submit_missing_manifest_returns_3(tmp_path):
