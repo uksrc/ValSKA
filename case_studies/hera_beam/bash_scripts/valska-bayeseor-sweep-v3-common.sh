@@ -27,6 +27,8 @@ SUBMIT_MODE="none"
 SUBMIT_MODE_KIND="per-point"
 ARRAY_MAX_CPU=""
 ARRAY_MAX_GPU=""
+CPU_TIME=""
+GPU_TIME=""
 USE_DRY_RUN="false"
 SUBMIT_DRY_RUN="false"
 RUN_REPORT="false"
@@ -44,6 +46,8 @@ Options:
     --submit-mode per-point|array Submission strategy for sweep jobs (default: per-point).
     --array-max-cpu N             Max concurrent CPU array tasks when --submit-mode array.
     --array-max-gpu N             Max concurrent GPU array tasks when --submit-mode array.
+  --cpu-time TIME               SLURM walltime for CPU jobs (default: runtime_paths.yaml).
+  --gpu-time TIME               SLURM walltime for GPU jobs (default: runtime_paths.yaml).
   --run-id ID                   Override the sweep run ID (default: $RUN_ID).
   --results-root DIR            Override results root (default: $RESULTS_ROOT).
   --dry-run                     Show the sweep plan without creating files or jobs.
@@ -61,6 +65,7 @@ Examples:
   $0 --submit none
   $0 --submit all
   $0 --submit all --submit-dry-run
+  $0 --submit all --cpu-time 06:00:00 --gpu-time 1-00:00:00
 EOF
 }
 
@@ -84,6 +89,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --array-max-gpu)
             ARRAY_MAX_GPU="${2:-}"
+            shift 2
+            ;;
+        --cpu-time)
+            CPU_TIME="${2:-}"
+            shift 2
+            ;;
+        --gpu-time)
+            GPU_TIME="${2:-}"
             shift 2
             ;;
         --results-root)
@@ -177,6 +190,12 @@ if [[ "$SUBMIT_MODE_KIND" == "array" ]]; then
     echo "  Array max CPU:     ${ARRAY_MAX_CPU:-<none>}"
     echo "  Array max GPU:     ${ARRAY_MAX_GPU:-<none>}"
 fi
+if [[ "$CPU_TIME" != "" ]]; then
+    echo "  CPU walltime:      $CPU_TIME"
+fi
+if [[ "$GPU_TIME" != "" ]]; then
+    echo "  GPU walltime:      $GPU_TIME"
+fi
 echo "  Dry run:           $USE_DRY_RUN"
 echo "  Submit dry run:    $SUBMIT_DRY_RUN"
 echo "  Run report:        $RUN_REPORT"
@@ -232,6 +251,14 @@ fi
 
 if [[ "$ARRAY_MAX_GPU" != "" ]]; then
     cmd+=(--array-max-gpu "$ARRAY_MAX_GPU")
+fi
+
+if [[ "$CPU_TIME" != "" ]]; then
+    cmd+=(--cpu-time "$CPU_TIME")
+fi
+
+if [[ "$GPU_TIME" != "" ]]; then
+    cmd+=(--gpu-time "$GPU_TIME")
 fi
 
 "${cmd[@]}"
