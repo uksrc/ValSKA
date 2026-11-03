@@ -41,7 +41,7 @@ class BayesEoRStageType(StageType):
     ):
         ensure_script_exists(plan.cpu_script, "CPU precompute")
 
-        jobs = result.get("jobs") or {"jobs": {}}
+        jobs = result.get("jobs") or {}
 
         # --------------------
         # CPU submission
@@ -55,7 +55,7 @@ class BayesEoRStageType(StageType):
         )
         result["commands"].append(cmd)
 
-        jobs["jobs"]["cpu_precompute"] = {
+        jobs["cpu_precompute"] = {
             "script": str(plan.cpu_script),
             "job_id": jobid,
             "cpu_precompute_driver_hypothesis": plan.cpu_precompute_driver_hypothesis,
@@ -73,10 +73,9 @@ class BayesEoRStageType(StageType):
         # GPU submission
         # --------------------
 
-        jobs = result.get("jobs") or {"jobs": {}}
+        jobs = result.get("jobs") or {}
 
-        cpu_jobs = jobs.get("jobs") or {}
-        cpu_job = cpu_jobs.get("cpu_precompute")
+        cpu_job = jobs.get("cpu_precompute")
 
         cpu_jobid = (
             cpu_job.get("job_id", "") if isinstance(cpu_job, dict) else ""
@@ -177,7 +176,7 @@ class BayesEoRStageType(StageType):
                 "job_id": jobid,
             }
 
-        jobs["jobs"]["gpu"] = gpu_jobs
+        jobs["gpu"] = gpu_jobs
         result["jobs"] = jobs
 
         return result, jobid, cmd

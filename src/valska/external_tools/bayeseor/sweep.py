@@ -241,57 +241,59 @@ def _render_and_write_array_scripts(
         "output", sweep_dir / "slurm-gpu-array-%A_%a.out"
     )
 
+    # CPU script
+    mode = "cpu"
+    bayeseor_command = prepare_bayeseor_commands(
+        runner=runner,
+        install=install,
+        config_yaml="$CONFIG_YAML",
+        mode=mode,
+    )
     cpu_script.write_text(
         render_array_submit_script(
-            command=prepare_bayeseor_commands(
-                runner=runner,
-                install=install,
-                config_yaml="$CONFIG_YAML",
-                mode="cpu",
-            ),
+            command=bayeseor_command,
             runner=runner,
-            sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="cpu_config",
-            tool_name=TOOL_NAME,
+            sweep_dir=sweep_dir,
             slurm=slurm_cpu_array,
-            mode="cpu",
+            mode=mode,
+            tool_name=TOOL_NAME,
         ),
         encoding="utf-8",
     )
+
+    # GPU scripts
+    mode = "gpu_run"
+    bayeseor_command = prepare_bayeseor_commands(
+        runner=runner,
+        install=install,
+        config_yaml="$CONFIG_YAML",
+        mode=mode,
+    )
     signal_script.write_text(
         render_array_submit_script(
-            command=prepare_bayeseor_commands(
-                runner=runner,
-                install=install,
-                config_yaml="$CONFIG_YAML",
-                mode="gpu_run",
-            ),
+            command=bayeseor_command,
             runner=runner,
-            sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="signal_fit_config",
-            tool_name=TOOL_NAME,
+            sweep_dir=sweep_dir,
             slurm=slurm_gpu_array,
-            mode="gpu_run",
+            mode=mode,
+            tool_name=TOOL_NAME,
         ),
         encoding="utf-8",
     )
     no_signal_script.write_text(
         render_array_submit_script(
-            command=prepare_bayeseor_commands(
-                runner=runner,
-                install=install,
-                config_yaml="$CONFIG_YAML",
-                mode="gpu_run",
-            ),
+            command=bayeseor_command,
             runner=runner,
-            sweep_dir=sweep_dir,
             tasks_json=tasks_json,
             config_key="no_signal_config",
-            tool_name=TOOL_NAME,
+            sweep_dir=sweep_dir,
             slurm=slurm_gpu_array,
-            mode="gpu_run",
+            mode=mode,
+            tool_name=TOOL_NAME,
         ),
         encoding="utf-8",
     )

@@ -391,7 +391,7 @@ def prepare_bayeseor_run(
 
     outputs: dict[str, Path] = {"run_dir": run_dir}
 
-    # Write configs + GPU run scripts per hypothesis
+    # Write config yaml + GPU run scripts per hypothesis
     for hyp in hypotheses:
         hyp_cfg = _materialise_hypothesis_config(
             base_cfg, hypothesis=hyp, run_dir=run_dir
@@ -401,7 +401,6 @@ def prepare_bayeseor_run(
         dump_yaml(hyp_cfg, config_yaml)
 
         mode = "gpu_run"
-
         # Produce BayesEoR command
         bayeseor_command = prepare_bayeseor_commands(
             runner=runner,
@@ -409,16 +408,15 @@ def prepare_bayeseor_run(
             config_yaml=config_yaml,
             mode=mode,
         )
-
         submit_gpu = run_dir / f"submit_{hyp}_gpu_run.sh"
         submit_gpu.write_text(
             render_submit_script(
+                command=bayeseor_command,
+                runner=runner,
                 config_yaml=config_yaml,
                 run_dir=run_dir,
                 slurm=slurm_gpu,
                 mode=mode,
-                command=bayeseor_command,
-                runner=runner,
                 tool_name=TOOL_NAME,
             ),
             encoding="utf-8",
@@ -434,7 +432,6 @@ def prepare_bayeseor_run(
     ]
 
     mode = "cpu"
-
     # Produce BayesEoR command
     bayeseor_commands = prepare_bayeseor_commands(
         runner=runner,
@@ -442,16 +439,15 @@ def prepare_bayeseor_run(
         config_yaml=cpu_config_yaml,
         mode=mode,
     )
-
     submit_cpu = run_dir / "submit_cpu_precompute.sh"
     submit_cpu.write_text(
         render_submit_script(
+            command=bayeseor_commands,
+            runner=runner,
             config_yaml=cpu_config_yaml,
             run_dir=run_dir,
             slurm=slurm_cpu,
-            mode="cpu",
-            command=bayeseor_commands,
-            runner=runner,
+            mode=mode,
             tool_name=TOOL_NAME,
         ),
         encoding="utf-8",

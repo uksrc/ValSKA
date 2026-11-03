@@ -11,6 +11,7 @@ from valska.external_tools.common.utils import get_int_or_none, get_str_or_none
 
 
 def _gpu_diag_block(mode: str) -> str:
+    """Build GPU Diagnostics block"""
     if mode != "gpu_run":
         return ""
     return """
@@ -297,7 +298,7 @@ def _build_submit_settings(
     mode: str,
     tool_name: str,
 ) -> tuple[str, str]:
-    """Build the job name, setup prefix and srun command."""
+    """Build the job name and srun command."""
 
     # -------------------------
     # Job identification
@@ -342,12 +343,12 @@ def render_submit_script(
 
     Parameters
     ----------
+    command
+        Command for running the tool
     runner
         How the tool is executed (currently conda; container support later).
-    install
-        Where the tool lives and how to locate its run script.
     config_yaml
-        Path to the rendered toll config YAML to run.
+        Path to the rendered tool config YAML to run.
     run_dir
         Run directory containing configs/logs/manifests.
     slurm
@@ -395,11 +396,9 @@ def render_submit_script(
                 (without the ``"#SBATCH "`` prefix)
 
     mode
-        Execution mode (just for BayesEoR module for now):
-
-        - ``"cpu"``: precompute instrument transfer matrices (BayesEoR ``--cpu``)
-        - ``"gpu_run"``: run sampling assuming precompute exists
-          (BayesEoR ``--gpu --run``)
+        Execution mode (cpu or gpu_run)
+    tool_name
+        Name of the tool
 
     Notes on timing
     ---------------
@@ -427,12 +426,18 @@ def render_submit_script(
     if mode not in {"cpu", "gpu_run"}:
         raise ValueError("mode must be one of: 'cpu', 'gpu_run'")
 
+    # Append the config name to the mode for the job_name.
+    config_name = config_yaml.stem.removeprefix("config_")
+    mode_with_suffix = mode
+    if config_name != mode:
+        mode_with_suffix = f"{mode}-{config_name}"
+
     job_name, inner_cmd = _build_submit_settings(
         command=command,
         runner=runner,
         slurm=slurm,
         run_dir=run_dir,
-        mode=mode,
+        mode=mode_with_suffix,
         tool_name=tool_name,
     )
 
@@ -460,35 +465,54 @@ def render_array_submit_script(
     *,
     command: str,
     runner: CondaRunner | ContainerRunner,
-    sweep_dir: Path,
     tasks_json: Path,
     config_key: str,
-    tool_name: str,
+    sweep_dir: Path,
     slurm: Mapping[str, object] | None = None,
     mode: str = "cpu",
-    # job_name_suffix: str="",
+    tool_name: str,
 ) -> str:
-    """Render a sweep-level Slurm array submit script."""
+    """
+    Render a sweep-level Slurm array submit script.
+
+    command
+        Command for running the tool
+    runner
+        How the tool is executed (currently conda; container support later).
+    tasks_json
+        Locations of rendered tool config YAML for each sweep run.
+    config_key
+        Specifies the config YAML (from tasks_json) to use for this run
+    sweep_dir
+        Sweep directory containing dirs for each sweep run with configs/logs/manifests.
+    slurm
+        Slurm settings map. Usually derived from runtime_paths.yaml defaults plus CLI overrides.
+    mode
+        Execution mode (cpu or gpu_run)
+    tool_name
+        Name of the tool
+
+    See also "render_submit_script" for more detailed docs.
+    """
 
     if mode not in {"cpu", "gpu_run"}:
         raise ValueError("mode must be one of: 'cpu', 'gpu_run'")
 
     slurm = dict(slurm or {})
 
-    # TODO: This bit needs to be made common or moved into the module.
-    # could add optional job_name_suffix to the arguments:
-    # job_name_suffix: str | None = None
-    # or specify which mode the sweep is over.
-    mode_suffix = mode
-    if mode == "gpu_run":
-        mode_suffix = f"{mode}-{config_key.removesuffix('_config')}"
+    # If there is a choice of config for a particular mode, then
+    # append the selected config name (for the job_name).
+    config_name = config_key.removesuffix("_config")
+    mode_with_suffix = mode
+    if config_name != mode:
+        mode_with_suffix = f"{mode}-{config_name}"
 
     job_name, inner_cmd = _build_submit_settings(
         command=command,
         runner=runner,
         slurm=slurm,
         run_dir=sweep_dir,
-        mode=mode_suffix,
+        mode=mode_with_suffix,
         tool_name=tool_name,
     )
 
