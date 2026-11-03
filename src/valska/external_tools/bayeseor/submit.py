@@ -268,7 +268,7 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
             )
             if isinstance(jobs, dict):
                 if (
-                    BayesEoRStageType.CPU in self.requested_stages
+                    BayesEoRStageType.CPU.value in self.requested_stages
                     and isinstance(jobs.get("cpu_precompute"), dict)
                     and jobs["cpu_precompute"].get("job_id")
                 ):
@@ -277,7 +277,7 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
                         "Refusing to submit CPU again. Use --force or --resubmit."
                     )
                 if (
-                    BayesEoRStageType.GPU in self.requested_stages
+                    BayesEoRStageType.GPU.value in self.requested_stages
                     and isinstance(jobs.get("gpu"), dict)
                 ):
                     gpu = jobs["gpu"]
