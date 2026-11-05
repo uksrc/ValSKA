@@ -77,6 +77,8 @@ def _build_rerunnable_sweep_cmd(
     submit_mode: _SUBMIT_MODE,
     array_max_cpu: int | None,
     array_max_gpu: int | None,
+    cpu_time: str | None,
+    gpu_time: str | None,
     submit_stage: _STAGE,
 ) -> str:
     """
@@ -155,6 +157,13 @@ def _build_rerunnable_sweep_cmd(
         parts += ["--array-max-cpu", _shell_quote(str(array_max_cpu))]
     if array_max_gpu is not None:
         parts += ["--array-max-gpu", _shell_quote(str(array_max_gpu))]
+
+    # Walltime overrides apply to every stage's re-rendered scripts, so keep
+    # both regardless of which stage the command submits.
+    if cpu_time is not None:
+        parts += ["--cpu-time", _shell_quote(cpu_time)]
+    if gpu_time is not None:
+        parts += ["--gpu-time", _shell_quote(gpu_time)]
 
     parts += ["--submit", _shell_quote(submit_stage)]
 
@@ -633,6 +642,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum concurrent GPU array tasks when --submit-mode=array.",
     )
     p.add_argument(
+        "--cpu-time",
+        type=str,
+        default=None,
+        help=(
+            "SLURM time override for CPU stage (e.g. 12:00:00).\n"
+            "If omitted, uses the CPU SLURM defaults from runtime_paths.yaml."
+        ),
+    )
+    p.add_argument(
+        "--gpu-time",
+        type=str,
+        default=None,
+        help=(
+            "SLURM time override for GPU stage (e.g. 12:00:00).\n"
+            "If omitted, uses the GPU SLURM defaults from runtime_paths.yaml."
+        ),
+    )
+    p.add_argument(
         "--hypothesis",
         choices=["signal_fit", "no_signal", "both"],
         default="both",
@@ -883,6 +910,10 @@ def main(argv: list[str] | None = None) -> int:
     # slurm defaults for scripts (match cli_prepare behaviour)
     slurm_cpu = _slurm_defaults(runtime, "cpu")
     slurm_gpu = _slurm_defaults(runtime, "gpu")
+    if args.cpu_time is not None:
+        slurm_cpu["time"] = args.cpu_time
+    if args.gpu_time is not None:
+        slurm_gpu["time"] = args.gpu_time
 
     try:
         overrides_dict = _parse_overrides(args.override)
@@ -933,6 +964,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  array_max_cpu:{args.array_max_cpu}")
             print(f"  array_max_gpu:{args.array_max_gpu}")
         print(f"  sbatch_exe:   {sbatch_exe}")
+        print(f"  cpu_time:     {slurm_cpu.get('time')}")
+        print(f"  gpu_time:     {slurm_gpu.get('time')}")
         print(f"  submit_dry:   {bool(args.submit_dry_run)}")
         print(f"  force:        {bool(args.force)}")
         print(f"  resubmit:     {bool(args.resubmit)}")
@@ -1124,6 +1157,8 @@ def main(argv: list[str] | None = None) -> int:
         submit_mode=args.submit_mode,
         array_max_cpu=args.array_max_cpu,
         array_max_gpu=args.array_max_gpu,
+        cpu_time=args.cpu_time,
+        gpu_time=args.gpu_time,
         submit_stage="cpu",
     )
     cmd_gpu = _build_rerunnable_sweep_cmd(
@@ -1154,6 +1189,8 @@ def main(argv: list[str] | None = None) -> int:
         submit_mode=args.submit_mode,
         array_max_cpu=args.array_max_cpu,
         array_max_gpu=args.array_max_gpu,
+        cpu_time=args.cpu_time,
+        gpu_time=args.gpu_time,
         submit_stage="gpu",
     )
     cmd_all = _build_rerunnable_sweep_cmd(
@@ -1184,6 +1221,8 @@ def main(argv: list[str] | None = None) -> int:
         submit_mode=args.submit_mode,
         array_max_cpu=args.array_max_cpu,
         array_max_gpu=args.array_max_gpu,
+        cpu_time=args.cpu_time,
+        gpu_time=args.gpu_time,
         submit_stage="all",
     )
 
