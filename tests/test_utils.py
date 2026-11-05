@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,40 @@ from valska.external_tools.bayeseor import (
 )
 
 UTILS_DIR = Path(os.path.abspath(utils.__file__)).parent.resolve()
+
+
+@patch("valska.utils.subprocess.check_output")
+def test_get_repo_root(mock_check_output):
+    mock_check_output.return_value = "/home/test/my_repo\n"
+
+    result = utils.get_repo_root()
+
+    assert result == Path("/home/test/my_repo")
+    mock_check_output.assert_called_once_with(
+        ["git", "rev-parse", "--show-toplevel"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+@patch("valska.utils.subprocess.check_output")
+def test_get_repo_root_git_error(mock_check_output):
+    mock_check_output.side_effect = subprocess.CalledProcessError(128, "git")
+
+    with pytest.raises(
+        RuntimeError, match="Could not determine the repository root"
+    ):
+        utils.get_repo_root()
+
+
+@patch("valska.utils.subprocess.check_output")
+def test_get_repo_root_git_not_installed(mock_check_output):
+    mock_check_output.side_effect = FileNotFoundError()
+
+    with pytest.raises(
+        RuntimeError, match="Could not determine the repository root"
+    ):
+        utils.get_repo_root()
 
 
 def test_tool_name_constant():
