@@ -111,8 +111,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/uksrc/ValSKA-HERA-beam-FWHM"
-Issues = "https://github.com/uksrc/ValSKA-HERA-beam-FWHM/issues"
+Homepage = "https://github.com/uksrc/ValSKA"
+Issues = "https://github.com/uksrc/ValSKA/issues"
 
 [project.scripts]
 # valska-beam-validate = "valska.cli:main"
