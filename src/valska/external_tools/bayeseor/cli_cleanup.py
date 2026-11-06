@@ -16,6 +16,7 @@ from valska.cli_format import (
     add_color_argument,
     resolve_color_mode,
 )
+from valska.external_tools.common.utils import utc_now_compact
 from valska.utils import get_default_path_manager
 
 from .cli_list_sweeps import discover_sweeps
@@ -69,10 +70,6 @@ def _apply_filters(
         out = out[:max_results]
 
     return out
-
-
-def _utc_stamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _is_older_than_days(
@@ -142,7 +139,7 @@ def _move_to_trash(path: Path, *, trash_root: Path, rel_root: Path) -> Path:
     target = trash_root / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        suffix = _utc_stamp()
+        suffix = utc_now_compact()
         target = target.with_name(f"{target.name}.{suffix}")
     shutil.move(str(path), str(target))
     return target
@@ -347,7 +344,10 @@ def main(argv: list[str] | None = None) -> int:
             trash_root = Path(args.trash_root).expanduser().resolve()
         else:
             trash_root = (
-                results_root / "bayeseor" / "_trash_cleanup" / _utc_stamp()
+                results_root
+                / "bayeseor"
+                / "_trash_cleanup"
+                / utc_now_compact()
             ).resolve()
 
     entries = discover_sweeps(results_root)
