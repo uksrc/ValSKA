@@ -95,7 +95,6 @@ from valska.cli_format import (
     resolve_color_mode,
 )
 from valska.external_tools.bayeseor import (
-    # ToolInstall,
     CondaRunner,
     get_template_path,
     list_templates,
