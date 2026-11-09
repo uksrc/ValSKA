@@ -292,7 +292,6 @@ echo "========================================"
 def _build_submit_settings(
     *,
     command: str,
-    runner: CondaRunner | ContainerRunner,
     slurm: Mapping[str, object],
     run_dir: Path,
     mode: str,
@@ -317,7 +316,7 @@ def _build_submit_settings(
     ntasks_for_srun = get_int_or_none(slurm, "ntasks", 1) or 1
     srun_prefix = f'srun --mpi={mpi} -n "${{SLURM_NTASKS:-{ntasks_for_srun}}}"'
 
-    inner_cmd = f"{srun_prefix} {runner.python_exe} {command}"
+    inner_cmd = f"{srun_prefix} {command}"
 
     return job_name, inner_cmd
 
@@ -434,7 +433,6 @@ def render_submit_script(
 
     job_name, inner_cmd = _build_submit_settings(
         command=command,
-        runner=runner,
         slurm=slurm,
         run_dir=run_dir,
         mode=mode_with_suffix,
@@ -509,7 +507,6 @@ def render_array_submit_script(
 
     job_name, inner_cmd = _build_submit_settings(
         command=command,
-        runner=runner,
         slurm=slurm,
         run_dir=sweep_dir,
         mode=mode_with_suffix,

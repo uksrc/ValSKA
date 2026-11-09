@@ -3,6 +3,10 @@ from pathlib import Path
 import pytest
 
 from valska.external_tools.bayeseor.constants import TOOL_NAME
+from valska.external_tools.bayeseor.setup import (
+    BayesEoRInstall,
+    prepare_bayeseor_commands,
+)
 from valska.external_tools.common.runner import CondaRunner
 from valska.external_tools.common.slurm import (
     render_array_submit_script,
@@ -255,24 +259,32 @@ def test_render_submit_script_includes_inner_command():
         conda_activate="source /opt/conda/etc/profile.d/conda.sh",
         env_name="bayeseor",
     )
-    command = "bayeseor run"
-
+    config_yaml = Path("/tmp/config.yaml")
+    mode = "cpu"
+    command = prepare_bayeseor_commands(
+        runner=runner,
+        install=BayesEoRInstall(
+            run_script=Path("test.sh"), install_path=Path("/bayeseor")
+        ),
+        config_yaml=config_yaml,
+        mode=mode,
+    )
     script = render_submit_script(
         runner=runner,
-        config_yaml=Path("/tmp/config.yaml"),
+        config_yaml=config_yaml,
         run_dir=Path("/tmp/run"),
         slurm={
             "partition": "a100_gpu",
             "cpus_per_task": 4,
             "ntasks": 1,
         },
-        mode="cpu",
+        mode=mode,
         command=command,
         tool_name=TOOL_NAME,
     )
 
     srun_prefix = 'srun --mpi=pmi2 -n "${SLURM_NTASKS:-1}"'
-    expected_inner_cmd = f"{srun_prefix} {runner.python_exe} {command}"
+    expected_inner_cmd = f'{srun_prefix} python -u "/bayeseor/test.sh" --config "/tmp/config.yaml" --cpu'
 
     assert expected_inner_cmd in script
     assert "/tmp/config.yaml" in script
@@ -283,8 +295,15 @@ def test_render_array_submit_script_includes_inner_command():
         conda_activate="source /opt/conda/etc/profile.d/conda.sh",
         env_name="bayeseor",
     )
-    command = "bayeseor run"
-
+    mode = "cpu"
+    command = prepare_bayeseor_commands(
+        runner=runner,
+        install=BayesEoRInstall(
+            run_script=Path("test.sh"), install_path=Path("/bayeseor")
+        ),
+        config_yaml="$CONFIG_YAML",
+        mode=mode,
+    )
     script = render_array_submit_script(
         runner=runner,
         tasks_json=Path("/tmp/sweep/array_tasks.json"),
@@ -295,13 +314,13 @@ def test_render_array_submit_script_includes_inner_command():
             "cpus_per_task": 4,
             "ntasks": 1,
         },
-        mode="cpu",
+        mode=mode,
         command=command,
         tool_name=TOOL_NAME,
     )
 
     srun_prefix = 'srun --mpi=pmi2 -n "${SLURM_NTASKS:-1}"'
-    expected_inner_cmd = f"{srun_prefix} {runner.python_exe} {command}"
+    expected_inner_cmd = f'{srun_prefix} python -u "/bayeseor/test.sh" --config "$CONFIG_YAML" --cpu'
 
     assert expected_inner_cmd in script
     assert "$CONFIG_YAML" in script
