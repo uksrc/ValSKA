@@ -229,7 +229,6 @@ def test_submit_all_preserves_stage_order_paths_and_jobs_json(
     assert "--dependency=afterok:10101" in result["commands"][2]
 
     # 3. Script paths and module-specific metadata are preserved.
-    print("result:", json.dumps(result, indent=2))
     jobs = result["jobs"]
 
     assert jobs["cpu_precompute"] == {
@@ -251,7 +250,7 @@ def test_submit_all_preserves_stage_order_paths_and_jobs_json(
         },
     }
 
-    assert result["hypothesis"] == ""
+    assert result["hypothesis"] == "both"
 
     # 4. The on-disk record agrees with the returned record.
     jobs_path = run_dir / "jobs.json"
@@ -265,6 +264,36 @@ def test_submit_all_preserves_stage_order_paths_and_jobs_json(
 
     # The shared pipeline should have recorded all three submissions.
     assert saved == result
+
+
+@pytest.mark.parametrize(
+    "hypothesis",
+    ["both", "signal_fit", "no_signal"],
+)
+def test_submit_records_hypothesis(tmp_path, hypothesis, monkeypatch):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    _write_submit_fixture(run_dir)
+    _write_completed_cpu_outputs(run_dir)
+
+    _ = _mock_sbatch(monkeypatch)
+
+    result = submit_tool_run(
+        run_dir,
+        stage_id="gpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(
+            hypothesis=hypothesis,
+            sbatch_exe="fake-sbatch",
+        ),
+    )
+
+    # Check the explicitly supplied option reaches the result.
+    assert result["hypothesis"] == hypothesis
+
+    # Check it is also present in the persisted jobs record.
+    saved = json.loads((run_dir / "jobs.json").read_text(encoding="utf-8"))
+    assert saved["hypothesis"] == hypothesis
 
 
 def test_submit_all_persists_stage_records(
@@ -359,8 +388,6 @@ def test_submit_all_refuses_duplicate_submission(
     jobs_path = run_dir / "jobs.json"
     before = json.loads(jobs_path.read_text(encoding="utf-8"))
 
-    print(before)
-
     assert before["jobs"]["cpu_precompute"]["job_id"] == "10101"
     assert before["jobs"]["gpu"]["signal_fit"]["job_id"] == "20202"
     assert before["jobs"]["gpu"]["no_signal"]["job_id"] == "30303"
@@ -440,3 +467,47 @@ def test_submit_gpu_uses_cpu_job_from_previous_invocation(
     assert len(saved["history"]) == 2
     assert saved["history"][0]["stage"] == "cpu"
     assert saved["history"][1]["stage"] == "gpu"
+
+
+def test_submit_records_common_and_tool_specific_options(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    _write_submit_fixture(run_dir)
+    _write_completed_cpu_outputs(run_dir)
+
+    options = BayesEoRRunOptions(
+        hypothesis="signal_fit",
+        sbatch_exe="fake-sbatch",
+        dry_run=True,
+    )
+
+    result = submit_tool_run(
+        run_dir,
+        stage_id="gpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=options,
+    )
+
+    assert result["sbatch"] == "fake-sbatch"
+    assert result["dry_run"] is True
+    assert result["hypothesis"] == "signal_fit"
+
+
+def test_bayeseor_run_options_defaults():
+    """Quick test to check defaults are passed as expected"""
+
+    options = BayesEoRRunOptions()
+
+    assert options.hypothesis == "both"
+    assert options.sbatch_exe == "sbatch"
+    assert options.dry_run is False
+    assert options.force is False
+    assert options.record == "jobs.json"
+
+    assert options.output_fields == {
+        "sbatch_exe": "sbatch",
+        "dry_run": "dry_run",
+        "hypothesis": "hypothesis",
+    }

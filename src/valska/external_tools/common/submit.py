@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from valska.external_tools.common.utils import utc_now_iso
 
@@ -46,6 +46,25 @@ class StageType(Enum):
     """Container type to inherit for each tool's own StageType class"""
 
 
+@dataclass
+class RunOptions:
+    """Common arguments for module run"""
+
+    depend_afterok: str | None = None
+    sbatch_exe: str = "sbatch"
+    dry_run: bool = False
+    force: bool = False
+    record: _RECORD = "jobs.json"
+
+    # Specify fields which should go into the jobs file
+    # and what their jobs.json names are.
+    # see JobsFile class definition
+    output_fields: ClassVar[dict[str, str]] = {
+        "sbatch_exe": "sbatch",
+        "dry_run": "dry_run",
+    }
+
+
 class JobsFile:
     """Fields found in a jobs.json file"""
 
@@ -71,18 +90,10 @@ class JobsFile:
         ("commands", []),
     ]
 
+    # Note, extra_fields are automatically assumed
+    # to be mergeable, and are defined specifically
+    # for each tool.
     extra_fields: list[tuple[str, ...]] = []
-
-
-@dataclass
-class RunOptions:
-    """Common arguments for module run"""
-
-    depend_afterok: str | None = None
-    sbatch_exe: str = "sbatch"
-    dry_run: bool = False
-    force: bool = False
-    record: _RECORD = "jobs.json"
 
 
 @dataclass()
@@ -350,16 +361,19 @@ def submit_tool_run[OptionsType: RunOptions](
         "run_dir": str(plan.run_dir),
         "manifest": str(plan.manifest_path),
         "submitted_utc": utc_now_iso(),
-        "sbatch": options.sbatch_exe,
-        "dry_run": bool(options.dry_run),
         "stage": stage_id,
         "commands": [],
         "jobs": plan.load_jobs(),
     }
 
-    # add tool specific extra fields to result
+    # add common and tool specific optional output fields
+    for option_name, jobs_field in options.output_fields.items():
+        result[jobs_field] = getattr(options, option_name)
+
+    # add any missing tool specific fields set to default values
     for extra_field, default in plan.jobs_file.extra_fields:
-        result[extra_field] = default
+        if extra_field not in result:
+            result[extra_field] = default
 
     # Stage specific code here
     # Each requested stage is a stage object.

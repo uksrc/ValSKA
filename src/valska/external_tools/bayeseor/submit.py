@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from valska.external_tools.common.submit import (
     InvalidArgumentError,
@@ -185,13 +185,21 @@ class BayesEoRStageType(StageType):
     GPU = BayesEoRStage(name="gpu", method=gpu_setup)
 
 
-class BayesEoRJobsFile(JobsFile):
-    extra_fields = [("hypothesis", "")]
-
-
 @dataclass
 class BayesEoRRunOptions(RunOptions):
     hypothesis: _HYP = "both"
+
+    # Specify fields which should go into the jobs file
+    # and what their jobs.json names are.
+    # see BayesEorJobsFile class definition
+    output_fields: ClassVar[dict[str, str]] = {
+        **RunOptions.output_fields,
+        "hypothesis": "hypothesis",
+    }
+
+
+class BayesEoRJobsFile(JobsFile):
+    extra_fields = [("hypothesis", "")]
 
 
 @dataclass()
