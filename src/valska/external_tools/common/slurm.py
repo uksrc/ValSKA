@@ -1,48 +1,17 @@
-"""SLURM submit-script rendering for BayesEoR runs."""
+"""Slurm submit-script rendering for external tool runs."""
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePath
 
-from .runner import BayesEoRInstall, CondaRunner, ContainerRunner
-
-
-def _get_str_or_none(
-    slurm: Mapping[str, object], key: str, default: str | None = None
-) -> str | None:
-    """Return stripped string if present and non-empty, else None."""
-    val = slurm.get(key, default)
-    if val is None:
-        return None
-    s = str(val).strip()
-    return s if s else None
-
-
-def _get_int_or_none(
-    slurm: Mapping[str, object], key: str, default: int | None = None
-) -> int | None:
-    """Return int if present and not None, else None."""
-    val = slurm.get(key, default)
-    if val is None:
-        return None
-    if not isinstance(val, int | str):
-        raise TypeError(
-            f"slurm['{key}'] must be int or str, got {type(val).__name__}"
-        )
-    return int(val)
-
-
-def _runner_prefix_and_python(
-    runner: CondaRunner | ContainerRunner,
-) -> tuple[str, str]:
-    """Return shell prefix and Python executable for the configured runner."""
-    if isinstance(runner, CondaRunner):
-        return runner.bash_prefix(), "python"
-    return "", "python  # TODO: container exec wrapper"
+from valska.external_tools.common.runner import CondaRunner, ContainerRunner
+from valska.external_tools.common.utils import get_int_or_none, get_str_or_none
 
 
 def _gpu_diag_block(mode: str) -> str:
+    """Build GPU Diagnostics block"""
     if mode != "gpu_run":
         return ""
     return """
@@ -67,26 +36,44 @@ def _build_sbatch_block(
     """Build the SBATCH header block and return it with the default CPU count."""
     slurm = dict(slurm or {})
 
-    partition = _get_str_or_none(slurm, "partition")
-    constraint = _get_str_or_none(slurm, "constraint")
-    qos = _get_str_or_none(slurm, "qos")
-    account = _get_str_or_none(slurm, "account")
-    reservation = _get_str_or_none(slurm, "reservation")
-    time = _get_str_or_none(slurm, "time", "12:00:00")
-    mem = _get_str_or_none(slurm, "mem", "8G")
-    mem_per_cpu = _get_str_or_none(slurm, "mem_per_cpu")
-    mem_per_gpu = _get_str_or_none(slurm, "mem_per_gpu")
-    nodes = _get_int_or_none(slurm, "nodes", 1)
-    ntasks = _get_int_or_none(slurm, "ntasks", 1)
-    ntasks_per_node = _get_int_or_none(slurm, "ntasks_per_node", 1)
-    cpus_per_task = _get_int_or_none(slurm, "cpus_per_task", 4)
-    gpus = _get_str_or_none(slurm, "gpus")
-    gpus_per_node = _get_str_or_none(slurm, "gpus_per_node")
-    gpus_per_task = _get_int_or_none(slurm, "gpus_per_task")
-    gres = _get_str_or_none(slurm, "gres")
+    # -------------------------
+    # Resource selection
+    # -------------------------
+    partition = get_str_or_none(slurm, "partition")
+    constraint = get_str_or_none(slurm, "constraint")
+    qos = get_str_or_none(slurm, "qos")
+    account = get_str_or_none(slurm, "account")
+    reservation = get_str_or_none(slurm, "reservation")
+    # -------------------------
+    # Time and memory
+    # -------------------------
+    time = get_str_or_none(slurm, "time", "12:00:00")
+    mem = get_str_or_none(slurm, "mem", "8G")
+    mem_per_cpu = get_str_or_none(slurm, "mem_per_cpu")
+    mem_per_gpu = get_str_or_none(slurm, "mem_per_gpu")
+    # -------------------------
+    # CPU/task configuration
+    # -------------------------
+    nodes = get_int_or_none(slurm, "nodes", 1)
+    ntasks = get_int_or_none(slurm, "ntasks", 1)
+    ntasks_per_node = get_int_or_none(slurm, "ntasks_per_node", 1)
+    cpus_per_task = get_int_or_none(slurm, "cpus_per_task", 4)
+    # -------------------------
+    # GPU configuration
+    # -------------------------
+    gpus = get_str_or_none(slurm, "gpus")
+    gpus_per_node = get_str_or_none(slurm, "gpus_per_node")
+    gpus_per_task = get_int_or_none(slurm, "gpus_per_task")
+    gres = get_str_or_none(slurm, "gres")
+    # -------------------------
+    # Execution control
+    # -------------------------
     exclusive = slurm.get("exclusive", None)
-    array_spec = _get_str_or_none(slurm, "array")
+    array_spec = get_str_or_none(slurm, "array")
 
+    # -------------------------
+    # Output paths
+    # -------------------------
     out_log = slurm.get("output", out_log_default)
     if out_log is not None:
         if not isinstance(out_log, str | Path):
@@ -98,6 +85,9 @@ def _build_sbatch_block(
             raise TypeError("slurm['error'] must be str or Path if provided")
         err_log = Path(err_log)
 
+    # -------------------------
+    # Extra SBATCH lines
+    # -------------------------
     extra_sbatch = slurm.get("extra_sbatch", [])
     if extra_sbatch is None:
         extra_sbatch = []
@@ -169,9 +159,9 @@ def _build_sbatch_block(
 
 def _render_submit_script_body(
     *,
+    tool_name: str,
     sbatch_block: str,
     prefix: str,
-    run_py: Path,
     mode: str,
     display_run_dir: str,
     display_config: str,
@@ -182,12 +172,22 @@ def _render_submit_script_body(
     gpu_diag_block: str = "",
 ) -> str:
     """Render the common submit-script body used by point and array modes."""
+
+    script = next(
+        (
+            arg
+            for arg in shlex.split(inner_cmd)
+            if PurePath(arg).suffix == ".py"
+        ),
+        None,
+    )
+
     return f"""{sbatch_block}
 
 set -eo pipefail
 
 # -----------------------------------------------------------------------------
-# ValSKA-generated BayesEoR submit script
+# ValSKA-generated {tool_name} submit script
 #
 # Mode: {mode}
 # Config: {display_config}
@@ -198,7 +198,7 @@ set -eo pipefail
 {setup_block}
 
 echo "========================================"
-echo "ValSKA / BayesEoR SLURM job starting"
+echo "ValSKA / {tool_name} Slurm job starting"
 echo "========================================"
 
 START_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -207,7 +207,7 @@ echo "Hostname:          $(hostname)"
 echo "Working dir:       $(pwd)"
 echo "Run dir:           {display_run_dir}"
 echo "Config:            {display_config}"
-echo "BayesEoR script:   {run_py}"
+echo '{tool_name} script:  {script}'
 echo "Mode:              {mode}"
 echo "----------------------------------------"
 
@@ -218,9 +218,9 @@ echo "OPENBLAS_NUM_THREADS=$OPENBLAS_NUM_THREADS"
 echo "OMP_NUM_THREADS=$OMP_NUM_THREADS"
 echo "----------------------------------------"
 
-echo "===== SLURM ENVIRONMENT (begin) ====="
+echo "===== Slurm ENVIRONMENT (begin) ====="
 env | sort | grep '^SLURM_' || echo "No SLURM_ variables found"
-echo "===== SLURM ENVIRONMENT (end) ====="
+echo "===== Slurm ENVIRONMENT (end) ====="
 echo "----------------------------------------"
 
 echo "Python: $(which python || true)"
@@ -279,49 +279,79 @@ fi
 echo "Exit code:         $RC"
 
 if [[ $RC -ne 0 ]]; then
-  echo "ERROR: BayesEoR command failed with exit code $RC"
+  echo "ERROR: {tool_name} command failed with exit code $RC"
   exit $RC
 fi
 
 echo "----------------------------------------"
-echo "ValSKA / BayesEoR SLURM job complete"
+echo "ValSKA / {tool_name} Slurm job complete"
 echo "========================================"
 """
 
 
+def _build_submit_settings(
+    *,
+    command: str,
+    slurm: Mapping[str, object],
+    run_dir: Path,
+    mode: str,
+    tool_name: str,
+) -> tuple[str, str]:
+    """Build the job name and srun command."""
+
+    # -------------------------
+    # Job identification
+    # -------------------------
+    job_name_prefix = (
+        get_str_or_none(slurm, "job_name_prefix", tool_name.lower())
+        or tool_name.lower()
+    )
+    job_name = (
+        get_str_or_none(slurm, "job_name")
+        or f"{job_name_prefix}-{run_dir.name}-{mode}"
+    )
+    mpi = get_str_or_none(slurm, "mpi", "pmi2") or "pmi2"
+
+    # Use ntasks default for srun if ntasks was None
+    ntasks_for_srun = get_int_or_none(slurm, "ntasks", 1) or 1
+    srun_prefix = f'srun --mpi={mpi} -n "${{SLURM_NTASKS:-{ntasks_for_srun}}}"'
+
+    inner_cmd = f"{srun_prefix} {command}"
+
+    return job_name, inner_cmd
+
+
 def render_submit_script(
     *,
+    command: str,
     runner: CondaRunner | ContainerRunner,
-    install: BayesEoRInstall,
     config_yaml: Path,
     run_dir: Path,
     slurm: Mapping[str, object] | None = None,
     mode: str = "cpu",
+    tool_name: str,
 ) -> str:
     """
-    Render a SLURM submit script for a BayesEoR run.
+    Render a Slurm submit script for an external tool run.
 
     This function aims to be HPC-friendly and debugging-friendly:
 
     - emits clear "what am I running" information
     - prints SLURM_* environment variables (helpful when diagnosing scheduling issues)
     - uses ``srun --mpi=<mpi> -n "$SLURM_NTASKS"`` by default to match common site setups
-    - uses BayesEoR's CLI flags:
-      - CPU stage: ``--cpu``
-      - GPU stage: ``--gpu --run``
 
     Parameters
     ----------
+    command
+        Command for running the tool
     runner
-        How BayesEoR is executed (currently conda; container support later).
-    install
-        Where BayesEoR lives and how to locate its run script.
+        How the tool is executed (currently conda; container support later).
     config_yaml
-        Path to the rendered BayesEoR config YAML to run.
+        Path to the rendered tool config YAML to run.
     run_dir
         Run directory containing configs/logs/manifests.
     slurm
-        SLURM settings map. Usually derived from runtime_paths.yaml defaults plus CLI overrides.
+        Slurm settings map. Usually derived from runtime_paths.yaml defaults plus CLI overrides.
 
         **Any key set to ``None`` (or not present) will be omitted from the
         generated script.** This allows cluster-specific suppression of
@@ -365,11 +395,9 @@ def render_submit_script(
                 (without the ``"#SBATCH "`` prefix)
 
     mode
-        Execution mode:
-
-        - ``"cpu"``: precompute instrument transfer matrices (BayesEoR ``--cpu``)
-        - ``"gpu_run"``: run sampling assuming precompute exists
-          (BayesEoR ``--gpu --run``)
+        Execution mode (cpu or gpu_run)
+    tool_name
+        Name of the tool
 
     Notes on timing
     ---------------
@@ -392,47 +420,35 @@ def render_submit_script(
     Set unsupported/unwanted directives to None in your runtime_paths.yaml
     to omit them from generated scripts.
     """
-    if mode not in {"cpu", "gpu_run"}:
-        raise ValueError("mode must be one of: 'cpu', 'gpu_run'")
     slurm = dict(slurm or {})
 
-    # -------------------------
-    # Job identification
-    # -------------------------
-    job_name_prefix = (
-        _get_str_or_none(slurm, "job_name_prefix", "bayeseor") or "bayeseor"
+    if mode not in {"cpu", "gpu_run"}:
+        raise ValueError("mode must be one of: 'cpu', 'gpu_run'")
+
+    # Append the config name to the mode for the job_name.
+    config_name = config_yaml.stem.removeprefix("config_")
+    mode_with_suffix = mode
+    if config_name != mode:
+        mode_with_suffix = f"{mode}-{config_name}"
+
+    job_name, inner_cmd = _build_submit_settings(
+        command=command,
+        slurm=slurm,
+        run_dir=run_dir,
+        mode=mode_with_suffix,
+        tool_name=tool_name,
     )
-    job_name = (
-        _get_str_or_none(slurm, "job_name")
-        or f"{job_name_prefix}-{run_dir.name}-{mode}"
-    )
-    mpi = _get_str_or_none(slurm, "mpi", "pmi2") or "pmi2"
 
-    # Where is BayesEoR's entrypoint script?
-    run_py = install.repo_path / install.run_script
-    prefix, python_exe = _runner_prefix_and_python(runner)
-
-    # -------------------------
-    # BayesEoR args by stage
-    # -------------------------
-    if mode == "cpu":
-        stage_flags = "--cpu"
-    else:
-        stage_flags = "--gpu --run"
-
-    # Use ntasks default for srun if ntasks was None
-    ntasks_for_srun = _get_int_or_none(slurm, "ntasks", 1) or 1
-    srun_prefix = f'srun --mpi={mpi} -n "${{SLURM_NTASKS:-{ntasks_for_srun}}}"'
-    inner_cmd = f'{srun_prefix} {python_exe} -u "{run_py}" --config "{config_yaml}" {stage_flags}'
     sbatch_block, cpus_default = _build_sbatch_block(
         slurm=slurm,
         job_name=job_name,
         out_log_default=run_dir / f"slurm-{mode}-%j.out",
     )
+
     return _render_submit_script_body(
+        tool_name=tool_name,
         sbatch_block=sbatch_block,
-        prefix=prefix,
-        run_py=run_py,
+        prefix=runner.bash_prefix,
         mode=mode,
         display_run_dir=str(run_dir),
         display_config=str(config_yaml),
@@ -445,49 +461,76 @@ def render_submit_script(
 
 def render_array_submit_script(
     *,
+    command: str,
     runner: CondaRunner | ContainerRunner,
-    install: BayesEoRInstall,
-    sweep_dir: Path,
     tasks_json: Path,
     config_key: str,
+    sweep_dir: Path,
     slurm: Mapping[str, object] | None = None,
     mode: str = "cpu",
+    tool_name: str,
 ) -> str:
-    """Render a sweep-level SLURM array submit script for BayesEoR runs."""
+    """
+    Render a sweep-level Slurm array submit script.
+
+    command
+        Command for running the tool
+    runner
+        How the tool is executed (currently conda; container support later).
+    tasks_json
+        Locations of rendered tool config YAML for each sweep run.
+    config_key
+        Specifies the config YAML (from tasks_json) to use for this run
+    sweep_dir
+        Sweep directory containing dirs for each sweep run with configs/logs/manifests.
+    slurm
+        Slurm settings map. Usually derived from runtime_paths.yaml defaults plus CLI overrides.
+    mode
+        Execution mode (cpu or gpu_run)
+    tool_name
+        Name of the tool
+
+    See also "render_submit_script" for more detailed docs.
+    """
+
     if mode not in {"cpu", "gpu_run"}:
         raise ValueError("mode must be one of: 'cpu', 'gpu_run'")
 
     slurm = dict(slurm or {})
-    job_name_prefix = (
-        _get_str_or_none(slurm, "job_name_prefix", "bayeseor") or "bayeseor"
+
+    # If there is a choice of config for a particular mode, then
+    # append the selected config name (for the job_name).
+    config_name = config_key.removesuffix("_config")
+    mode_with_suffix = mode
+    if config_name != mode:
+        mode_with_suffix = f"{mode}-{config_name}"
+
+    job_name, inner_cmd = _build_submit_settings(
+        command=command,
+        slurm=slurm,
+        run_dir=sweep_dir,
+        mode=mode_with_suffix,
+        tool_name=tool_name,
     )
-    mode_suffix = mode
-    if mode == "gpu_run":
-        mode_suffix = f"{mode}-{config_key.removesuffix('_config')}"
-    job_name = (
-        _get_str_or_none(slurm, "job_name")
-        or f"{job_name_prefix}-{sweep_dir.name}-{mode_suffix}"
-    )
-    mpi = _get_str_or_none(slurm, "mpi", "pmi2") or "pmi2"
-    run_py = install.repo_path / install.run_script
-    prefix, python_exe = _runner_prefix_and_python(runner)
-    ntasks_for_srun = _get_int_or_none(slurm, "ntasks", 1) or 1
-    stage_flags = "--cpu" if mode == "cpu" else "--gpu --run"
-    srun_prefix = f'srun --mpi={mpi} -n "${{SLURM_NTASKS:-{ntasks_for_srun}}}"'
-    inner_cmd = (
-        f'{srun_prefix} {python_exe} -u "{run_py}" '
-        f'--config "$CONFIG_YAML" {stage_flags}'
-    )
+
     sbatch_block, cpus_default = _build_sbatch_block(
         slurm=slurm,
         job_name=job_name,
         out_log_default=sweep_dir / f"slurm-{mode}-%A_%a.out",
     )
 
+    # This embeds a Python script in a shell heredoc to load the sweep manifest,
+    # select the task corresponding to SLURM_ARRAY_TASK_ID, and export task
+    # details as shell variables.
+    # This logic is currently coupled to the generated Slurm script and assumes a
+    # particular manifest structure.
+    # TODO: Refactor sweep task loading into a shared helper and validate the manifest
+    # with pydantic
+
     setup_block = f"""
 TASKS_JSON="{tasks_json}"
 TASK_INDEX="${{SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID must be set for array submission}}"
-eval "$({python_exe} - "$TASKS_JSON" "$TASK_INDEX" "{config_key}" <<'PY'
+eval "$({runner.python_exe} - "$TASKS_JSON" "$TASK_INDEX" "{config_key}" <<'PY'
 import json
 import shlex
 import sys
@@ -512,9 +555,9 @@ cd "$RUN_DIR"
         "${SLURM_ARRAY_TASK_ID:-0}.txt"
     )
     return _render_submit_script_body(
+        tool_name=tool_name,
         sbatch_block=sbatch_block,
-        prefix=prefix,
-        run_py=run_py,
+        prefix=runner.bash_prefix,
         mode=mode,
         display_run_dir="$RUN_DIR",
         display_config="$CONFIG_YAML",

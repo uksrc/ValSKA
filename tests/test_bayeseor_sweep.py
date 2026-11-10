@@ -2,10 +2,8 @@ import json
 from pathlib import Path
 
 from valska.external_tools.bayeseor import sweep as sweep_mod
-from valska.external_tools.bayeseor.runner import (
-    BayesEoRInstall,
-    CondaRunner,
-)
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.common.runner import CondaRunner
 
 
 def _stub_prepare_factory(base_dir: Path):
@@ -38,7 +36,7 @@ def test_run_fwhm_sweep_array_mode_generates_expected_scripts(
 
     result = sweep_mod.run_fwhm_sweep(
         template_yaml=tmp_path / "template.yaml",
-        install=BayesEoRInstall(repo_path=tmp_path / "BayesEoR"),
+        install=BayesEoRInstall(install_path=tmp_path / "BayesEoR"),
         runner=CondaRunner(
             conda_activate="source /tmp/conda.sh", env_name="bayeseor"
         ),
@@ -108,11 +106,11 @@ def test_run_fwhm_sweep_array_submit_all_records_one_cpu_and_two_gpu_jobs(
         }
         return job_ids[script.name], f"sbatch {script}"
 
-    monkeypatch.setattr(sweep_mod, "_run_sbatch", _fake_run_sbatch)
+    monkeypatch.setattr(sweep_mod, "run_sbatch", _fake_run_sbatch)
 
     result = sweep_mod.run_fwhm_sweep(
         template_yaml=tmp_path / "template.yaml",
-        install=BayesEoRInstall(repo_path=tmp_path / "BayesEoR"),
+        install=BayesEoRInstall(install_path=tmp_path / "BayesEoR"),
         runner=CondaRunner(
             conda_activate="source /tmp/conda.sh", env_name="bayeseor"
         ),
@@ -172,7 +170,7 @@ def test_run_fwhm_sweep_array_submit_all_dry_run_writes_jobs_json_and_placeholde
 
     result = sweep_mod.run_fwhm_sweep(
         template_yaml=tmp_path / "template.yaml",
-        install=BayesEoRInstall(repo_path=tmp_path / "BayesEoR"),
+        install=BayesEoRInstall(install_path=tmp_path / "BayesEoR"),
         runner=CondaRunner(
             conda_activate="source /tmp/conda.sh", env_name="bayeseor"
         ),
@@ -250,7 +248,7 @@ def test_run_fwhm_sweep_array_gpu_requires_known_cpu_dependency(
 
     result = sweep_mod.run_fwhm_sweep(
         template_yaml=tmp_path / "template.yaml",
-        install=BayesEoRInstall(repo_path=tmp_path / "BayesEoR"),
+        install=BayesEoRInstall(install_path=tmp_path / "BayesEoR"),
         runner=CondaRunner(
             conda_activate="source /tmp/conda.sh", env_name="bayeseor"
         ),
