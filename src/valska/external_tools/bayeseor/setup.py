@@ -10,14 +10,13 @@ from typing import Any
 
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
+from valska import __version__
+from valska.external_tools.bayeseor import TOOL_NAME
 from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.common.runner import CondaRunner, ContainerRunner
 from valska.external_tools.common.slurm import render_submit_script
 from valska.external_tools.common.utils import utc_now_compact
 from valska.utils_yaml import dump_yaml, load_yaml
-
-from ... import __version__
-from ..common.runner import CondaRunner, ContainerRunner
-from . import TOOL_NAME
 
 # -----------------------------------------------------------------------------
 # YAML IO (ruamel.yaml)

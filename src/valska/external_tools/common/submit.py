@@ -101,8 +101,8 @@ class SubmitPlan[OptionsType: RunOptions]:
     """Resolved paths, config, and methods needed to submit a prepared run."""
 
     run_dir: Path
-    stage_id: str  # (this can include "all" which is actually two stages)
-    options: OptionsType  # (each module may have its own options class)
+    stage_id: str  # this can include "all" which could be multiple stages
+    options: OptionsType  # each module may have its own options class
     # These are the resolved stage objects in a list:
     requested_stages: list[Stage] = field(init=False)
     manifest_path: Path = field(init=False)
@@ -124,11 +124,6 @@ class SubmitPlan[OptionsType: RunOptions]:
         """
         Load and parse manifest.json from a prepared run directory.
 
-        Parameters
-        ----------
-        run_dir
-            Prepared run directory containing manifest.json.
-
         Returns
         -------
         dict
@@ -146,6 +141,7 @@ class SubmitPlan[OptionsType: RunOptions]:
             ) from e
 
     def load_jobs(self) -> dict[str, Any] | None:
+        """Load jobs.json file"""
         p = self.jobs_path
         if not p.exists():
             return None
@@ -215,11 +211,13 @@ class SubmitPlan[OptionsType: RunOptions]:
         return merged
 
     def write_jobs(self, jobs: dict[str, Any]) -> Path:
+        """Write jobs.json file"""
         p = self.jobs_path
         p.write_text(json.dumps(jobs, indent=2), encoding="utf-8")
         return p
 
     def normalise_path(self, p: Path | None) -> Path | None:
+        """Normalise the path - if path is relative, add run_dir"""
         if p is None:
             return None
         return (
@@ -235,6 +233,7 @@ class SubmitPlan[OptionsType: RunOptions]:
 def get_path_from_artefacts(
     artefacts: dict[str, Any], key: str, required: bool = True
 ) -> Path | None:
+    """Get the path from artifacts dictionary"""
     p = artefacts.get(key)
     if p is None:
         if required:
@@ -246,6 +245,7 @@ def get_path_from_artefacts(
 
 
 def ensure_script_exists(path: Path, label: str) -> None:
+    """Raise MissingDependencyError if path does not exist"""
     if not path.exists():
         raise MissingDependencyError(f"Missing {label} script: {path}")
     if not path.is_file():
@@ -320,8 +320,10 @@ def submit_tool_run[OptionsType: RunOptions](
     ----------
     run_dir
         Prepared run directory.
-    stage
-        Which stage(s) to submit: e.g. "cpu", "gpu", or "all".
+    stage_id
+        Which stage id(s) to submit: e.g. "cpu", "gpu", or "all".
+    submit_plan
+        The submit information contained in a SubmitPlan object
     options
         run options containing common + module specific options:
         depend_afterok: Optional sbatch job id to depend on for GPU submissions.
@@ -329,6 +331,7 @@ def submit_tool_run[OptionsType: RunOptions](
         dry_run: If True, do not submit jobs; return the commands that would run.
         force: If True, allow resubmission even if jobs.json indicates prior submissions.
         record: Where to record submission metadata. Currently only "jobs.json" is supported.
+        etc.
 
     Returns
     -------

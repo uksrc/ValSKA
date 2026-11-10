@@ -7,6 +7,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from valska.external_tools.bayeseor import TOOL_NAME
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.bayeseor.setup import (
+    prepare_bayeseor_commands,
+    prepare_bayeseor_run,
+)
+from valska.external_tools.bayeseor.submit import (
+    _HYP,
+    BayesEoRRunOptions,
+    BayesEoRSubmitPlan,
+)
 from valska.external_tools.common.runner import CondaRunner, ContainerRunner
 from valska.external_tools.common.slurm import render_array_submit_script
 from valska.external_tools.common.submit import (
@@ -27,13 +38,7 @@ from valska.external_tools.common.utils import (
     write_json_object,
 )
 
-from . import TOOL_NAME
-from .runner import BayesEoRInstall
-from .setup import prepare_bayeseor_commands, prepare_bayeseor_run
-from .submit import BayesEoRRunOptions, BayesEoRSubmitPlan
-
 _STAGE = Literal["none", "cpu", "gpu", "all"]
-_HYP = Literal["signal_fit", "no_signal", "both"]
 _PERT = Literal["fwhm_deg", "antenna_diameter"]
 _SUBMIT_MODE = Literal["per-point", "array"]
 

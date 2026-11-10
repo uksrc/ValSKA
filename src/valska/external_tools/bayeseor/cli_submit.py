@@ -8,6 +8,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from valska.cli_format import CliColors, add_color_argument, resolve_color_mode
+from valska.external_tools.bayeseor.submit import (
+    BayesEoRRunOptions,
+    BayesEoRSubmitPlan,
+    _find_completed_cpu_precompute_matrix_dir,
+)
 from valska.external_tools.common.submit import (
     InvalidArgumentError,
     MissingDependencyError,
@@ -16,13 +22,6 @@ from valska.external_tools.common.submit import (
     submit_tool_run,
 )
 from valska.external_tools.common.utils import utc_now_compact
-
-from ...cli_format import CliColors, add_color_argument, resolve_color_mode
-from .submit import (
-    BayesEoRRunOptions,
-    BayesEoRSubmitPlan,
-    _find_completed_cpu_precompute_matrix_dir,
-)
 
 
 def _load_runtime_paths_yaml() -> dict[str, Any]:
