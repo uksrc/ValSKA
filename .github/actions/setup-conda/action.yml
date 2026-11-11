@@ -1,23 +1,18 @@
-name: "Setup Conda Environment"
-description: "Restore cache and install conda environment"
+name: "Setup Conda Environment" 
+description: "Restore cache and install environment using Micromamba"
 
-runs:
+runs: 
   using: composite
   steps:
-    - name: Restore conda package cache
-      uses: actions/cache@v4
+    - name: Setup Micromamba
+      uses: mamba-org/setup-micromamba@v3
       with:
-        path: ~/conda_pkgs_dir
-        key: ${{ runner.os }}-conda-${{ hashFiles('valska_env_base.yaml') }}
-
-    - name: Setup Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        activate-environment: valska
+        environment-name: valska
         environment-file: valska_env_base.yaml
-        # We do not need the base environment to be activated as well
-        auto-activate: true
-        use-mamba: true
-        conda-solver: libmamba
-        pkgs-dirs: ~/conda_pkgs_dir
-        channel-priority: strict
+        init-shell: bash
+        cache-environment: true
+        cache-downloads: true
+        condarc: |
+          channels:
+            - conda-forge
+          channel_priority: strict
