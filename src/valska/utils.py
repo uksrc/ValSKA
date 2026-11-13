@@ -22,14 +22,51 @@ from __future__ import annotations
 
 import inspect
 import os
+import subprocess
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import yaml  # type: ignore[import-untyped]
 
 PathLike = str | Path
+
+
+# =============================================================================
+# General
+# =============================================================================
+
+
+def read_yaml(path: PathLike) -> dict[str, Any]:
+    """
+    Load YAML file safely
+    """
+
+    with open(path, encoding="utf-8") as file:
+        return yaml.safe_load(file) or {}
+
+
+def get_repo_root() -> Path:
+    """
+    Return the repository root path
+
+    Assumes the code is being run from within a Git working tree.
+    """
+
+    try:
+        return Path(
+            subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise RuntimeError(
+            "Could not determine the repository root. "
+            "Ensure Git is installed and you are running from within a cloned Git repository."
+        ) from exc
 
 
 # =============================================================================
@@ -112,8 +149,7 @@ def load_runtime_paths(
     if not p.exists():
         return {}
 
-    with p.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    data = read_yaml(p)
 
     if not isinstance(data, dict):
         raise ValueError(f"Expected a mapping in runtime paths YAML: {p}")
@@ -544,10 +580,17 @@ def load_paths(custom_paths_file: PathLike | None = None) -> dict[str, str]:
     if not paths_file.exists():
         raise FileNotFoundError(f"Paths file not found: {paths_file}")
 
-    with open(paths_file, encoding="utf-8") as f:
-        paths = yaml.safe_load(f)
+    paths = read_yaml(paths_file)
 
-    return paths
+    # Ensure correct type for output
+    result: dict[str, str] = {}
+
+    for k, v in paths.items():
+        if not isinstance(v, str):
+            raise TypeError(f"{k!r} has non-string value {v!r}")
+        result[k] = v
+
+    return result
 
 
 # =============================================================================
