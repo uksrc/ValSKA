@@ -173,6 +173,7 @@ def _render_submit_script_body(
 ) -> str:
     """Render the common submit-script body used by point and array modes."""
 
+    # Eventually, there may need to be a safer way to recover the script path
     script = next(
         (
             arg
@@ -528,9 +529,9 @@ def render_array_submit_script(
     # with pydantic
 
     setup_block = f"""
-TASKS_JSON="{tasks_json}"
+TASKS_JSON={shlex.quote(str(tasks_json))}
 TASK_INDEX="${{SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID must be set for array submission}}"
-eval "$({runner.python_exe} - "$TASKS_JSON" "$TASK_INDEX" "{config_key}" <<'PY'
+eval "$({shlex.quote(runner.python_exe)} - "$TASKS_JSON" "$TASK_INDEX" {shlex.quote(config_key)} <<'PY'
 import json
 import shlex
 import sys

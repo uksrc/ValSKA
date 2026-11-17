@@ -29,16 +29,12 @@ _CPU_MATRIX_MARKERS: dict[str, tuple[str, ...]] = {
 _HYP = Literal["signal_fit", "no_signal", "both"]
 
 
-class BayesEoRStage(Stage):
-    """Inherits the Stage class which contains info about a stage and points to the setup method"""
-
-
 class BayesEoRStageType(StageType):
     @staticmethod
     def cpu_precompute_setup(
         plan: BayesEoRSubmitPlan,
         result: dict[str, Any],
-    ):
+    ) -> dict[str, Any]:
         ensure_script_exists(plan.cpu_script, "CPU precompute")
 
         jobs = result.get("jobs") or {}
@@ -62,13 +58,13 @@ class BayesEoRStageType(StageType):
         }
         result["jobs"] = jobs
 
-        return result, jobid, cmd
+        return result
 
     @staticmethod
     def gpu_setup(
         plan: BayesEoRSubmitPlan,
         result: dict[str, Any],
-    ):
+    ) -> dict[str, Any]:
         # --------------------
         # GPU submission
         # --------------------
@@ -179,10 +175,10 @@ class BayesEoRStageType(StageType):
         jobs["gpu"] = gpu_jobs
         result["jobs"] = jobs
 
-        return result, jobid, cmd
+        return result
 
-    CPU = BayesEoRStage(name="cpu_precompute", method=cpu_precompute_setup)
-    GPU = BayesEoRStage(name="gpu", method=gpu_setup)
+    CPU = Stage(name="cpu_precompute", method=cpu_precompute_setup)
+    GPU = Stage(name="gpu", method=gpu_setup)
 
 
 @dataclass
@@ -218,7 +214,9 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
 
         self.jobs_file = BayesEoRJobsFile()
 
-        artefacts = self.load_manifest().get("artefacts", {})
+        manifest = self.load_manifest()
+
+        artefacts = manifest.get("artefacts", {})
         if not isinstance(artefacts, dict):
             raise MissingDependencyError(
                 "manifest['artefacts'] is missing or not a dict"
@@ -235,10 +233,10 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
         )
 
         self.cpu_precompute_driver_hypothesis = (
-            self.load_manifest()
-            .get("bayeseor", {})
-            .get("cpu_precompute_driver_hypothesis", None)
-            if isinstance(self.load_manifest().get("bayeseor", {}), dict)
+            manifest.get("bayeseor", {}).get(
+                "cpu_precompute_driver_hypothesis", None
+            )
+            if isinstance(manifest.get("bayeseor", {}), dict)
             else None
         )
 
@@ -263,18 +261,27 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
                 f"Unknown BayesEoR submission stage: {stage}"
             )
 
-    def check_jobs_not_running(self, force):
+    def check_no_existing_jobs(self, force: bool) -> dict[str, Any]:
+        """
+        Checks that jobs.json does not already contain entries for
+        CPU or GPU stages.
+        If jobs are found, raises an exception (unless force=True
+        in which case it returns the jobs dictionary)
+        """
         existing_jobs = self.load_jobs()
+
+        jobs: dict[str, Any] = {}
 
         # Second-line guardrail: refuse re-submission of a stage if that stage is already recorded,
         # unless force=True. (cli_submit.py also enforces guardrails; this protects programmatic calls.)
         if existing_jobs is not None and not force:
-            jobs = (
+            check_jobs = (
                 existing_jobs.get("jobs")
                 if isinstance(existing_jobs, dict)
                 else None
             )
-            if isinstance(jobs, dict):
+            if isinstance(check_jobs, dict):
+                jobs = check_jobs
                 if (
                     BayesEoRStageType.CPU.value in self.requested_stages
                     and isinstance(jobs.get("cpu_precompute"), dict)
@@ -298,6 +305,9 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
                             f"GPU jobs already recorded in jobs.json for {self.run_dir}. "
                             "Refusing to submit GPU again. Use --force or --resubmit."
                         )
+
+        # If force=True (or existing jobs was None), return the jobs dict
+        return jobs
 
 
 def _safe_int_jobid(x: Any) -> str | None:

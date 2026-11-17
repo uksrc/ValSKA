@@ -35,11 +35,14 @@ class SbatchError(SubmissionError):
 
 
 @dataclass()
-class Stage:
+class Stage[PlanType: SubmitPlan[Any]]:
     """Holds details about a stage and points to the method which does any setup before submission"""
 
     name: str
-    method: Callable
+    method: Callable[
+        [PlanType, dict[str, Any]],
+        dict[str, Any],
+    ]
 
 
 class StageType(Enum):
@@ -226,8 +229,14 @@ class SubmitPlan[OptionsType: RunOptions]:
             else p.resolve()
         )
 
-    def check_jobs_not_running(self, force):
-        """To be implemented by each tool"""
+    def check_no_existing_jobs(self, force: bool) -> dict[str, Any]:
+        """
+        To be implemented by each tool
+        Should raise an exception if there are existing jobs recorded
+        in jobs.json (unless force=True)
+        If force=True should return the existing jobs dictionary
+        """
+        return {}
 
 
 def get_path_from_artefacts(
@@ -358,7 +367,7 @@ def submit_tool_run[OptionsType: RunOptions](
             "Use record='jobs.json' (default)."
         )
 
-    plan.check_jobs_not_running(options.force)
+    existing_jobs = plan.check_no_existing_jobs(options.force)
 
     result: dict[str, Any] = {
         "run_dir": str(plan.run_dir),
@@ -366,7 +375,7 @@ def submit_tool_run[OptionsType: RunOptions](
         "submitted_utc": utc_now_iso(),
         "stage": stage_id,
         "commands": [],
-        "jobs": plan.load_jobs(),
+        "jobs": existing_jobs,
     }
 
     # add common and tool specific optional output fields
@@ -381,7 +390,7 @@ def submit_tool_run[OptionsType: RunOptions](
     # Stage specific code here
     # Each requested stage is a stage object.
     for requested_stage in plan.requested_stages:
-        result, jobid, cmd = requested_stage.method(plan, result)
+        result = requested_stage.method(plan, result)
 
     if not options.dry_run:
         merged = plan.merge_jobs_record(result)

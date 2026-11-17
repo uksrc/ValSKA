@@ -151,7 +151,7 @@ def test_render_array_submit_script_includes_task_lookup_and_array_header():
             env_name="bayeseor",
         ),
         sweep_dir=Path("/tmp/sweep"),
-        tasks_json=Path("/tmp/sweep/array_tasks.json"),
+        tasks_json=Path("/tmp/sweep/array tasks.json"),
         config_key="cpu_config",
         slurm={
             "partition": "a100_gpu",
@@ -168,7 +168,7 @@ def test_render_array_submit_script_includes_task_lookup_and_array_header():
     assert "#SBATCH --output=/tmp/sweep/slurm-cpu-%A_%a.out" in script
 
     # Manifest loading
-    assert 'TASKS_JSON="/tmp/sweep/array_tasks.json"' in script
+    assert "TASKS_JSON='/tmp/sweep/array tasks.json'" in script
     assert (
         'TASK_INDEX="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID must be set for array submission}"'
         in script
@@ -284,7 +284,7 @@ def test_render_submit_script_includes_inner_command():
     )
 
     srun_prefix = 'srun --mpi=pmi2 -n "${SLURM_NTASKS:-1}"'
-    expected_inner_cmd = f'{srun_prefix} python -u "/bayeseor/test.sh" --config "/tmp/config.yaml" --cpu'
+    expected_inner_cmd = f"{srun_prefix} python -u /bayeseor/test.sh --config /tmp/config.yaml --cpu"
 
     assert expected_inner_cmd in script
     assert "/tmp/config.yaml" in script
@@ -320,8 +320,8 @@ def test_render_array_submit_script_includes_inner_command():
     )
 
     srun_prefix = 'srun --mpi=pmi2 -n "${SLURM_NTASKS:-1}"'
-    expected_inner_cmd = f'{srun_prefix} python -u "/bayeseor/test.sh" --config "$CONFIG_YAML" --cpu'
+    expected_inner_cmd = f'{srun_prefix} python -u /bayeseor/test.sh --config "$CONFIG_YAML" --cpu'
 
     assert expected_inner_cmd in script
-    assert "$CONFIG_YAML" in script
+    assert '"$CONFIG_YAML"' in script
     assert 'cd "$RUN_DIR"' in script

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -240,17 +241,29 @@ def prepare_bayeseor_commands(
     # Where is BayesEoR's entrypoint script?
     run_py = install.install_path / install.run_script
 
+    command_args = [
+        runner.python_exe,
+        "-u",
+        str(run_py),
+    ]
+
+    command = shlex.join(command_args)
+
+    # Config yaml as Path to file, or shell variable such as "$CONFIG_YAML"
+    if isinstance(config_yaml, Path):
+        command += f" --config {shlex.quote(str(config_yaml))}"
+    else:
+        command += f' --config "{config_yaml}"'
+
     # -------------------------
     # BayesEoR args by stage
     # -------------------------
     if mode == "cpu":
-        stage_flags = "--cpu"
+        command += " --cpu"
     else:
-        stage_flags = "--gpu --run"
+        command += " --gpu --run"
 
-    run_command = f'{runner.python_exe} -u "{run_py}" --config "{config_yaml}" {stage_flags}'
-
-    return run_command
+    return command
 
 
 # -----------------------------------------------------------------------------
@@ -432,7 +445,7 @@ def prepare_bayeseor_run(
 
     mode = "cpu"
     # Produce BayesEoR command
-    bayeseor_commands = prepare_bayeseor_commands(
+    bayeseor_command = prepare_bayeseor_commands(
         runner=runner,
         install=install,
         config_yaml=cpu_config_yaml,
@@ -441,7 +454,7 @@ def prepare_bayeseor_run(
     submit_cpu = run_dir / "submit_cpu_precompute.sh"
     submit_cpu.write_text(
         render_submit_script(
-            command=bayeseor_commands,
+            command=bayeseor_command,
             runner=runner,
             config_yaml=cpu_config_yaml,
             run_dir=run_dir,
