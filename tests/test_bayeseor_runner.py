@@ -1,13 +1,21 @@
 from pathlib import Path
 
+import pytest
+
 from valska.external_tools.bayeseor.runner import BayesEoRInstall
 
 
 def test_bayeseor_install_accepts_repo_path():
     """Test that BayesEoRInstall is backwards compatible"""
-    install = BayesEoRInstall(repo_path=Path("/tmp/bayeseor"))
+
+    with pytest.warns(
+        DeprecationWarning,
+        match="'repo_path' is deprecated; use 'install_path' instead.",
+    ):
+        install = BayesEoRInstall(repo_path=Path("/tmp/bayeseor"))
 
     assert install.install_path == Path("/tmp/bayeseor")
+    assert install.repo_path == Path("/tmp/bayeseor")
 
 
 def test_bayeseor_install_repo_path_alias():

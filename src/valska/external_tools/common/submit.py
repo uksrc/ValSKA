@@ -229,14 +229,12 @@ class SubmitPlan[OptionsType: RunOptions]:
             else p.resolve()
         )
 
-    def check_no_existing_jobs(self, force: bool) -> dict[str, Any]:
+    def check_no_existing_jobs(self, force: bool):
         """
         To be implemented by each tool
         Should raise an exception if there are existing jobs recorded
         in jobs.json (unless force=True)
-        If force=True should return the existing jobs dictionary
         """
-        return {}
 
 
 def get_path_from_artefacts(
@@ -367,7 +365,7 @@ def submit_tool_run[OptionsType: RunOptions](
             "Use record='jobs.json' (default)."
         )
 
-    existing_jobs = plan.check_no_existing_jobs(options.force)
+    plan.check_no_existing_jobs(options.force)
 
     result: dict[str, Any] = {
         "run_dir": str(plan.run_dir),
@@ -375,7 +373,7 @@ def submit_tool_run[OptionsType: RunOptions](
         "submitted_utc": utc_now_iso(),
         "stage": stage_id,
         "commands": [],
-        "jobs": existing_jobs,
+        "jobs": {},
     }
 
     # add common and tool specific optional output fields

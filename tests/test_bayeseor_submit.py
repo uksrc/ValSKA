@@ -341,6 +341,9 @@ def test_submit_all_persists_stage_records(
         "10101",
     ]
 
+    # Check that jobs structure is set up correctly and not nested
+    assert "jobs" not in result["jobs"]
+
     # The returned canonical jobs structure contains both stages.
     jobs = result["jobs"]
     assert set(jobs) == {"cpu_precompute", "gpu"}

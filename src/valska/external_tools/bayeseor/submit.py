@@ -302,27 +302,23 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
                 f"Unknown BayesEoR submission stage: {stage}"
             )
 
-    def check_no_existing_jobs(self, force: bool) -> dict[str, Any]:
+    def check_no_existing_jobs(self, force: bool):
         """
         Checks that jobs.json does not already contain entries for
         CPU or GPU stages.
-        If jobs are found, raises an exception (unless force=True
-        in which case it returns the jobs dictionary)
+        If jobs are found, raises an exception (unless force=True)
         """
         existing_jobs = self.load_jobs()
-
-        jobs: dict[str, Any] = {}
 
         # Second-line guardrail: refuse re-submission of a stage if that stage is already recorded,
         # unless force=True. (cli_submit.py also enforces guardrails; this protects programmatic calls.)
         if existing_jobs is not None and not force:
-            check_jobs = (
+            jobs = (
                 existing_jobs.get("jobs")
                 if isinstance(existing_jobs, dict)
                 else None
             )
-            if isinstance(check_jobs, dict):
-                jobs = check_jobs
+            if isinstance(jobs, dict):
                 if (
                     BayesEoRStageType.CPU.value in self.requested_stages
                     and isinstance(jobs.get("cpu_precompute"), dict)
@@ -346,9 +342,6 @@ class BayesEoRSubmitPlan(SubmitPlan[BayesEoRRunOptions]):
                             f"GPU jobs already recorded in jobs.json for {self.run_dir}. "
                             "Refusing to submit GPU again. Use --force or --resubmit."
                         )
-
-        # If force=True (or existing jobs was None), return the jobs dict
-        return jobs
 
 
 def _safe_int_jobid(x: Any) -> str | None:
