@@ -6,8 +6,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Literal
+from warnings import warn
 
 from valska.external_tools.common.submit import (
+    _RECORD,
     InvalidArgumentError,
     JobsFile,
     MissingDependencyError,
@@ -18,6 +20,7 @@ from valska.external_tools.common.submit import (
     ensure_script_exists,
     get_path_from_artefacts,
     run_sbatch,
+    submit_tool_run,
 )
 
 _AFTEROK_RE = re.compile(r"afterok:(\d+)")
@@ -28,7 +31,45 @@ _CPU_MATRIX_MARKERS: dict[str, tuple[str, ...]] = {
 
 _HYP = Literal["signal_fit", "no_signal", "both"]
 
+#####################################################
+# Maintain compatibility with previous public methods
 
+
+def submit_bayeseor_run(
+    run_dir: Path,
+    *,
+    stage: str = "all",
+    hypothesis: _HYP = "both",
+    depend_afterok: str | None = None,
+    sbatch_exe: str = "sbatch",
+    dry_run: bool = False,
+    force: bool = False,
+    record: _RECORD = "jobs.json",
+) -> dict[str, Any]:
+    """Compatibility wrapper around submit_tool_run."""
+
+    warn(
+        "'submit_bayeseor_run' is deprecated; use 'submit_tool_run' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    return submit_tool_run(
+        run_dir,
+        stage_id=stage,
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(
+            hypothesis=hypothesis,
+            depend_afterok=depend_afterok,
+            sbatch_exe=sbatch_exe,
+            dry_run=dry_run,
+            force=force,
+            record=record,
+        ),
+    )
+
+
+#####################################################
 class BayesEoRStageType(StageType):
     @staticmethod
     def cpu_precompute_setup(

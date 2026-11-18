@@ -88,6 +88,13 @@ def _mock_sbatch(monkeypatch):
     return submissions
 
 
+def test_submit_bayeseor_run_exists():
+    """Test for backwards compatibility"""
+    from valska.external_tools.bayeseor import submit_bayeseor_run
+
+    assert callable(submit_bayeseor_run)
+
+
 def test_submit_gpu_uses_recorded_dependency_when_outputs_missing(tmp_path):
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -511,3 +518,50 @@ def test_bayeseor_run_options_defaults():
         "dry_run": "dry_run",
         "hypothesis": "hypothesis",
     }
+
+
+def test_history_entry_contains_only_jobs_from_current_invocation(
+    tmp_path,
+    monkeypatch,
+):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    _write_submit_fixture(run_dir)
+
+    _ = _mock_sbatch(monkeypatch)
+
+    # First invocation - CPU
+    submit_tool_run(
+        run_dir,
+        stage_id="cpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(
+            hypothesis="both",
+            sbatch_exe="fake-sbatch",
+        ),
+    )
+
+    # Second invocation - GPU
+    submit_tool_run(
+        run_dir,
+        stage_id="gpu",
+        submit_plan=BayesEoRSubmitPlan,
+        options=BayesEoRRunOptions(
+            hypothesis="both",
+            sbatch_exe="fake-sbatch",
+        ),
+    )
+
+    saved = json.loads((run_dir / "jobs.json").read_text())
+
+    assert len(saved["history"]) == 2
+
+    cpu_entry = saved["history"][0]
+    gpu_entry = saved["history"][1]
+
+    assert cpu_entry["stage"] == "cpu"
+    assert set(cpu_entry["jobs"]) == {"cpu_precompute"}
+
+    assert gpu_entry["stage"] == "gpu"
+    assert set(gpu_entry["jobs"]) == {"gpu"}

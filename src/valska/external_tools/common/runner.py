@@ -15,6 +15,11 @@ class ToolInstall:
 
     install_path: Path
 
+    @property
+    def repo_path(self) -> Path:
+        """Backward compatibility alias."""
+        return self.install_path
+
 
 @dataclass(frozen=True)
 class CondaRunner:

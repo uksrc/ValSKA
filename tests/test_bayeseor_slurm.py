@@ -29,6 +29,13 @@ def _render_script(mode: str) -> str:
     )
 
 
+def test_slurm_module_still_importable():
+    """Test old slurm module still importable"""
+    import valska.external_tools.bayeseor.slurm
+
+    assert valska.external_tools.bayeseor.slurm is not None
+
+
 def test_render_submit_script_gpu_run_includes_non_blocking_gpu_diagnostics():
     script = _render_script("gpu_run")
 

@@ -2,8 +2,19 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from warnings import warn
 
-from valska.external_tools.common.runner import ToolInstall
+from valska.external_tools.common.runner import (
+    CondaRunner,
+    ContainerRunner,
+    ToolInstall,
+)
+
+__all__ = [
+    "BayesEoRInstall",
+    "CondaRunner",
+    "ContainerRunner",
+]
 
 
 @dataclass(frozen=True)
@@ -17,3 +28,29 @@ class BayesEoRInstall(ToolInstall):
     """
 
     run_script: Path = Path("scripts/run-analysis.py")
+
+    # Backward compatibility to allow repo_path instead of install_path
+    def __init__(
+        self,
+        install_path: Path | None = None,
+        repo_path: Path | None = None,
+        run_script: Path = Path("scripts/run-analysis.py"),
+    ):
+
+        if repo_path is not None:
+            warn(
+                "'repo_path' is deprecated; use 'install_path' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        if install_path is None:
+            install_path = repo_path
+
+        if install_path is None:
+            raise TypeError(
+                "Either install_path or repo_path must be supplied"
+            )
+
+        object.__setattr__(self, "install_path", Path(install_path))
+        object.__setattr__(self, "run_script", run_script)
