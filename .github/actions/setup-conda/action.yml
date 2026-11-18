@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     - name: Setup Micromamba
-      uses: mamba-org/setup-micromamba@v3
+      uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39
       with:
         environment-name: valska
         environment-file: valska_env_base.yaml
