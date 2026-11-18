@@ -7,9 +7,9 @@ Primary entry points:
 - get_template_path: access shipped validation templates.
 """
 
+from valska.external_tools.common.runner import CondaRunner, ContainerRunner
 from valska.external_tools.common.submit import SubmissionError
 
-from ..common.runner import CondaRunner, ContainerRunner, ToolInstall
 from .chain_utils import (
     build_group_labels,
     build_pp_groups_from_paths,
@@ -18,6 +18,7 @@ from .chain_utils import (
 )
 from .constants import TOOL_NAME
 from .report import generate_sweep_report
+from .runner import BayesEoRInstall
 from .setup import prepare_bayeseor_run
 from .submit import submit_bayeseor_run
 from .sweep_health import inspect_sweep_health
@@ -29,14 +30,14 @@ from .valska_bayeseor_plotting import (
 )
 
 __all__ = [
-    "submit_bayeseor_run",
-    "SubmissionError",
     "prepare_bayeseor_run",
+    "submit_bayeseor_run",
     "generate_sweep_report",
     "inspect_sweep_health",
+    "SubmissionError",
     "get_template_path",
     "list_templates",
-    "ToolInstall",
+    "BayesEoRInstall",
     "CondaRunner",
     "ContainerRunner",
     "TOOL_NAME",

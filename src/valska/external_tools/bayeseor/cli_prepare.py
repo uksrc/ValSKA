@@ -94,13 +94,13 @@ from valska.cli_format import (
     add_color_argument,
     resolve_color_mode,
 )
-from valska.external_tools.bayeseor import (
-    CondaRunner,
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.bayeseor.setup import prepare_bayeseor_run
+from valska.external_tools.bayeseor.templates import (
     get_template_path,
     list_templates,
-    prepare_bayeseor_run,
 )
-from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.common.runner import CondaRunner
 from valska.external_tools.common.utils import utc_now_compact
 from valska.utils import (
     get_default_path_manager,
