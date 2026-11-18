@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -68,3 +69,31 @@ def extract_numeric_job_id(
             return None
         value = value.get(key)
     return str(value).strip() if is_numeric_job_id(value) else None
+
+
+# Mapping-value coercion helpers
+
+
+def get_str_or_none(
+    mapping: Mapping[str, object], key: str, default: str | None = None
+) -> str | None:
+    """Return stripped string if present and non-empty, else None."""
+    val = mapping.get(key, default)
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
+def get_int_or_none(
+    mapping: Mapping[str, object], key: str, default: int | None = None
+) -> int | None:
+    """Return int if present and not None, else None."""
+    val = mapping.get(key, default)
+    if val is None:
+        return None
+    if not isinstance(val, int | str):
+        raise TypeError(
+            f"mapping['{key}'] must be int or str, got {type(val).__name__}"
+        )
+    return int(val)

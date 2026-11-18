@@ -1,13 +1,20 @@
-"""Runner abstractions for executing BayesEoR via conda or containers."""
-
-from __future__ import annotations
+"""Extends the common external tool ToolInstall for BayesEoR. Runners are unchanged so can be imported from the common runner module."""
 
 from dataclasses import dataclass
 from pathlib import Path
+from warnings import warn
+
+from valska.external_tools.common.runner import (
+    CondaRunner as CondaRunner,
+)
+from valska.external_tools.common.runner import (
+    ContainerRunner as ContainerRunner,
+)
+from valska.external_tools.common.runner import ToolInstall
 
 
 @dataclass(frozen=True)
-class BayesEoRInstall:
+class BayesEoRInstall(ToolInstall):
     """
     Where BayesEoR lives and which script to invoke.
 
@@ -16,42 +23,30 @@ class BayesEoRInstall:
     - Later, if BayesEoR provides a stable module/entrypoint, we can support that too.
     """
 
-    repo_path: Path
     run_script: Path = Path("scripts/run-analysis.py")
 
+    # Backward compatibility to allow repo_path instead of install_path
+    def __init__(
+        self,
+        install_path: Path | None = None,
+        repo_path: Path | None = None,
+        run_script: Path = Path("scripts/run-analysis.py"),
+    ):
 
-@dataclass(frozen=True)
-class CondaRunner:
-    """
-    Run BayesEoR via a named conda environment.
+        if repo_path is not None:
+            warn(
+                "'repo_path' is deprecated; use 'install_path' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
-    conda_activate should point to conda.sh (or equivalent) so that `conda activate` works
-    inside non-interactive batch shells (SLURM).
-    """
+        if install_path is None:
+            install_path = repo_path
 
-    conda_activate: (
-        str  # e.g. "source /path/to/miniconda3/etc/profile.d/conda.sh"
-    )
-    env_name: str  # e.g. "bayeseor"
+        if install_path is None:
+            raise TypeError(
+                "Either install_path or repo_path must be supplied"
+            )
 
-    def bash_prefix(self) -> str:
-        """Return shell lines to activate the conda environment."""
-        return f"{self.conda_activate}\nconda activate {self.env_name}\n"
-
-
-@dataclass(frozen=True)
-class ContainerRunner:
-    """
-    Future: Run BayesEoR inside a container (Apptainer/Singularity).
-
-    This is included now so we don’t need to redesign the API later.
-    The only thing that should change is how we construct the command line;
-    config rendering and output directory conventions stay identical.
-
-    Example future command:
-      apptainer exec --bind <binds> <image.sif> python <run-analysis.py> <config.yaml>
-    """
-
-    apptainer_exe: str  # "apptainer" or "singularity"
-    image_path: Path
-    bind_paths: tuple[Path, ...] = ()
+        object.__setattr__(self, "install_path", Path(install_path))
+        object.__setattr__(self, "run_script", run_script)
