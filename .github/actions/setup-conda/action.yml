@@ -1,7 +1,7 @@
 name: "Setup Conda Environment" 
 description: "Restore cache and install environment using Micromamba"
 
-runs: 
+runs:
   using: composite
   steps:
     - name: Setup Micromamba
