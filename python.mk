@@ -128,8 +128,15 @@ python-post-test:
 python-do-test:
 	@$(PYTHON_RUNNER) pytest --version -c /dev/null
 	@mkdir -p build
-	$(PYTHON_VARS_BEFORE_PYTEST) $(PYTHON_RUNNER) pytest $(PYTHON_VARS_AFTER_PYTEST) \
-	 --cov=$(PYTHON_SRC) --cov-report=term-missing --cov-report html:build/reports/code-coverage --cov-report xml:build/reports/code-coverage.xml --junitxml=build/reports/unit-tests.xml $(PYTHON_TEST_FILE)
+	$(PYTHON_VARS_BEFORE_PYTEST) $(PYTHON_RUNNER) pytest \
+		$(PYTHON_VARS_AFTER_PYTEST) \
+		-m "not integration" \
+	 	--cov=$(PYTHON_SRC) \
+		--cov-report=term-missing \
+		--cov-report html:build/reports/code-coverage \
+		--cov-report xml:build/reports/code-coverage.xml \
+		--junitxml=build/reports/unit-tests.xml \
+		$(PYTHON_TEST_FILE)
 
 ## TARGET: python-test
 ## SYNOPSIS: make python-test
@@ -144,6 +151,23 @@ python-do-test:
 ##  specific configuration set in pytest.ini, setup.cfg etc. located in ./tests
 
 python-test: python-pre-test python-do-test python-post-test  ## test the Python package
+
+python-do-test-integration:
+	@$(PYTHON_RUNNER) pytest --version -c /dev/null
+	$(PYTHON_RUNNER) pytest \
+		-m integration \
+		tests
+
+python-test-integration: python-do-test-integration
+
+## TARGET: python-test-integration
+## SYNOPSIS: make python-test-integration
+## HOOKS: 
+## VARS:
+##
+##  Run pytest against the integration tests defined in ./tests with 
+##  "integration" markers.
+
 
 notebook-pre-format:
 

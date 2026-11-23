@@ -183,3 +183,6 @@ omit = ["src/valska_hera_beam/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["temp"]
+markers = [
+    "integration: tests requiring a full pipeline or external resources",
+]
