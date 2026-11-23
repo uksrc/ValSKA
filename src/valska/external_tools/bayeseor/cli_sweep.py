@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from valska.cli_format import (
     CliColors,
@@ -14,23 +14,28 @@ from valska.cli_format import (
     resolve_color_mode,
 )
 from valska.external_tools.bayeseor import (
-    BayesEoRInstall,
     CondaRunner,
     get_template_path,
+)
+from valska.external_tools.bayeseor import (
+    sweep as sweep_mod,  # for DRY helpers (run_label + point dirs)
+)
+from valska.external_tools.bayeseor.cli_prepare import (
+    _get_nested,
+    _slurm_defaults,
+)
+from valska.external_tools.bayeseor.runner import BayesEoRInstall
+from valska.external_tools.bayeseor.sweep import (
+    _PERT,
+    _STAGE,
+    _SUBMIT_MODE,
+    run_fwhm_sweep,
+    sweep_root,
 )
 from valska.utils import (
     get_default_path_manager,
     resolve_data_path_info,
 )
-
-from . import sweep as sweep_mod  # for DRY helpers (run_label + point dirs)
-from .cli_prepare import _get_nested, _slurm_defaults
-from .sweep import run_fwhm_sweep, sweep_root
-
-_STAGE = Literal["none", "cpu", "gpu", "all"]
-_HYP = Literal["signal_fit", "no_signal", "both"]
-_PERT = Literal["fwhm_deg", "antenna_diameter"]
-_SUBMIT_MODE = Literal["per-point", "array"]
 
 
 def _shell_quote(s: str) -> str:
@@ -1003,7 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    install = BayesEoRInstall(repo_path=Path(str(repo_path)).expanduser())
+    install = BayesEoRInstall(install_path=Path(str(repo_path)).expanduser())
     runner = CondaRunner(conda_activate=str(conda_sh), env_name=str(conda_env))
 
     sweep_res = run_fwhm_sweep(
