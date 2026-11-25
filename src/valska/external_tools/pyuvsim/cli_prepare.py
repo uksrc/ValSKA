@@ -23,8 +23,7 @@ Specifically, it:
 Design principles
 -----------------
 - setup.prepare_pyuvsim_run() is the single source of truth for canonical
-  run_dir construction. This CLI only duplicates run_dir logic for --dry-run
-  display.
+  run_dir construction.
 
 Variant concept
 ---------------
@@ -89,6 +88,7 @@ from valska.cli_format import (
 from valska.external_tools.pyuvsim import (
     CondaRunner,
     ContainerRunner,
+    compute_run_dir,
     get_template_path,
     list_templates,
     prepare_pyuvsim_run,
@@ -126,38 +126,8 @@ def _derive_variant_from_template_path(template_yaml: Path) -> str:
       - remove first occurrence of "_template" if present
     """
     stem = template_yaml.stem
-    if "_template" in stem:
-        stem = stem.replace("_template", "", 1)
+    stem = stem.replace("_template", "", 1)
     return stem.strip("_") or template_yaml.stem
-
-
-def _compute_run_dir(
-    *,
-    results_root: Path,
-    beam_model: str,
-    sky_model: str,
-    variant: str,
-    run_label: str,
-    run_id: str,
-    unique: bool,
-) -> Path:
-    """
-    Compute the canonical run directory for --dry-run display only.
-
-    NOTE: This duplicates the layout logic used in setup.prepare_pyuvsim_run().
-    For real prepares we pass run_dir=None so setup.py computes the canonical
-    location itself (single source of truth).
-    """
-    base = (
-        results_root
-        / "pyuvsim"
-        / beam_model
-        / sky_model
-        / variant
-        / run_label
-        / run_id
-    )
-    return base / _utc_stamp() if unique else base
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -664,7 +634,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     # dry-run preview run_dir
-    preview_run_dir = _compute_run_dir(
+    preview_run_dir = compute_run_dir(
         results_root=results_root,
         beam_model=beam_model,
         sky_model=sky_model,

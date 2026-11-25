@@ -9,11 +9,12 @@ Primary entry points:
 
 from .constants import TOOL_NAME
 from .runner import CondaRunner, ContainerRunner, pyuvsimInstall
-from .setup import prepare_pyuvsim_run
+from .setup import compute_run_dir, prepare_pyuvsim_run
 from .submit import SubmissionError, submit_pyuvsim_run
 from .templates import get_template_path, list_templates
 
 __all__ = [
+    "compute_run_dir",
     "prepare_pyuvsim_run",
     "submit_pyuvsim_run",
     "SubmissionError",

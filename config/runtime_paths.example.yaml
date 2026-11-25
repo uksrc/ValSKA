@@ -123,6 +123,9 @@ pyuvsim:
 
   # Default template if --template is not provided
   default_template: fov-19.4-oscar-sm.yml
+
+  # Whether to enforce unique output directories by default
+  unique_by_default: false
   
   # Diagnostic check of beam profile
   beamcheck:
