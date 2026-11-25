@@ -2,13 +2,37 @@
 Validation Primer
 =================
 
-About This Primer
+**About This Primer**
 
-This page provides a high-level introduction to the science validation work carried out by the UKSRC-ST team. It is intended for stakeholders, collaborators, and contributors who want to understand *what validation is*, *why it matters*, and *how it is implemented* in the context of precision science with the SKA and its precursors.
+This page provides a high-level introduction to the science validation work carried out by the **UKSRC Science Validation and Tooling (UKSRC-ST)** team. It is intended for stakeholders, collaborators, and contributors who want to understand *what validation is*, *why it matters*, and *how it is implemented* in the context of precision science with the **SKA** and its precursors.
 
 Whether you are a scientist, instrument team member, or programme manager, this primer aims to clarify how validation supports your work -- from model reliability to science decision-making.
 
-For a more detailed discussion of validation in the context of precision astrophysics and cosmology see e.g. `Aguirre+22 <https://arxiv.org/abs/2104.09547>`__, `Sims+25a <https://arxiv.org/abs/2502.14029>`__, `b <https://arxiv.org/abs/2506.20042>`__ and references therein.
+For a more detailed discussion of validation in the context of precision astrophysics and cosmology see, for example, \ `Aguirre+22 <https://arxiv.org/abs/2104.09547>`__\ , \ `Sims+25a <https://arxiv.org/abs/2502.14029>`__\ , \ `b <https://arxiv.org/abs/2506.20042>`__\  and references therein.
+
+| 
+
+**Summary of Scope and Deliverables**
+
+The **Validation Primer** provides an overview of how the UKSRC-ST team supports credible, reproducible science with the SKA and its precursors.
+
+Our goal is to ensure that SKA data analysis pipelines -- and the models they depend on -- are demonstrably reliable, traceable, and scientifically trustworthy. We achieve this through modular validation tools, end-to-end testing, and formal model validation within a Bayesian framework.
+
+Validation enables the community to quantify confidence in science results, identify potential sources of bias, and guide investments in calibration, modelling, and simulation.
+
+**Key Deliverables:**
+
+- Publicly accessible validation tools and workflows hosted on the `UKSRC GitHub organisation <https://github.com/uksrc>`__
+
+- Reproducible validation datasets and software artifacts to be archived via **Zenodo**
+
+- Validation studies and documentation shared within the **SRCNet Confluence**
+
+- Collaborative frameworks enabling joint validation exercises with other **SKA teams**
+
+By combining scientific rigour with open access and reproducibility, the UKSRC validation framework helps both UK and international researchers maximise the scientific return from SKA data.
+
+
 
 🔍 1. What is Validation?
 =========================
@@ -31,25 +55,25 @@ Validation plays a different role from **verification**:
 
 In the SKA context, this means asking:
 
--  Is our knowledge of the instrument (e.g. beam, layout, calibration) good enough for the highest precision science cases?
+- Is our knowledge of the instrument (e.g. beam, layout, calibration) good enough for the highest precision science cases?
 
--  Are our simulations and pipelines accurate representations of the real sky and telescope?
+- Are our simulations and pipelines accurate representations of the real sky and telescope?
 
--  Can we confidently go beyond the current observational and modelling frontier to detect and interpret never-before-seen faint signals?
+- Can we confidently go beyond the current observational and modelling frontier to detect and interpret never-before-seen faint signals?
 
 Because real SKA and precursor data are complex and contaminated with systematics (e.g. foregrounds, calibration errors, instrumental effects), validation gives us a principled way to:
 
--  Quantify our confidence in detections or upper limits.
+- Quantify our confidence in detections or upper limits.
 
--  Identify and mitigate potential sources of bias.
+- Identify and mitigate potential sources of bias.
 
--  Set requirements on instrument performance and data quality.
+- Set requirements on instrument performance and data quality.
 
 **Key takeaway:**
 
    We validate to ensure that *precision astrophysics is built on solid foundations*. Without validation, even sophisticated analyses can lead to incorrect or misleading conclusions.
 
-|
+| 
 
 🎯 2. Why is Validation Critical for SKA Science?
 =================================================
@@ -61,11 +85,11 @@ Modern radio cosmology aims to detect some of the faintest signals ever measured
 
 Many of the most important SKA and precursor science goals, such as probing the Epoch of Reionization (EoR), measuring Baryon Acoustic Oscillations or constraining properties of dark matter and gravity, rely on:
 
--  Detecting extremely weak signals (e.g. the 21-cm power spectrum is >10\ :sup:`5`\ × fainter than foregrounds)
+- Detecting extremely weak signals (e.g. the 21-cm power spectrum is >10\ :sup:`5`\ × fainter than foregrounds)
 
--  Modelling instruments with complex, evolving systematics (e.g. beam chromaticity, mutual coupling)
+- Modelling instruments with complex, evolving systematics (e.g. beam chromaticity, mutual coupling)
 
--  Separating multiple overlapping signal components in the data (e.g. cosmological signal, sky foregrounds, instrument noise, systematics)
+- Separating multiple overlapping signal components in the data (e.g. cosmological signal, sky foregrounds, instrument noise, systematics)
 
 These challenges introduce **failure modes** that are hard to detect without formal validation:
 
@@ -88,19 +112,31 @@ These challenges introduce **failure modes** that are hard to detect without for
 
 Validation mitigates these risks by testing whether our models and analysis pipelines are **good enough for the science goal at hand**. For SKA and precursor science, this involves:
 
--  **Simulating realistic observations**, including known sky, instrument, and noise models
+- **Simulating realistic observations**, including known sky, instrument, and noise models
 
--  **Processing those simulations** through the full analysis pipeline
+- **Processing those simulations** through the full analysis pipeline
 
--  **Comparing the output** to the known input to check for bias, loss, or spurious structure
+- **Comparing the output** to the known input to check for bias, loss, or spurious structure
 
 These tests can be done at multiple levels:
 
--  **Module-level**: Does this beam model correctly simulate primary beam effects?
+- **Module-level**: Does this beam model correctly simulate primary beam effects?
 
--  **Pipeline-level**: Does the entire pipeline recover the input Signal of Interest (SOI) within expected uncertainty?
+- **Pipeline-level**: Does the entire pipeline recover the input Signal of Interest (SOI) within expected uncertainty?
 
--  **Bayesian model-level**: Does our inference framework favour the correct model when presented with SOI-free data?
+- **Bayesian model-level**: Does our inference framework favour the correct model when presented with SOI-free data?
+
+| 
+
+**The Role of UKSRC Science Validation Tools**
+
+As described in detail below, the UKSRC Science Validation and Tooling Team provides support to the community by:
+
+- Testing and benchmarking existing simulation software.
+- Setting analysis tolerances on realistic sources of uncertainty in the instrument and sky.
+- Providing tools and examples to validate key science analysis pipeline outputs.
+
+| 
 
 --------------
 
@@ -109,25 +145,34 @@ These tests can be done at multiple levels:
 
 Validation provides **evidence-based confidence** that:
 
--  Instrument specs (e.g. beam FWHM accuracy, antenna layout) are sufficient
+- Instrument specs (e.g. beam FWHM accuracy, antenna layout) are sufficient
 
--  Science pipelines are not introducing systematic biases
+- Science pipelines are not introducing systematic biases
 
--  Reported results -- such as detections or upper limits -- are **credible**
+- Reported results -- such as detections or upper limits -- are **credible**
 
 | It also helps set priorities:
 | If validation shows a particular systematic effect (e.g. beam mischaracterization) dominates the science error budget, this can guide investments in better measurements or modelling.
 
-   **Without validation, we’re building science conclusions on untested assumptions. With validation, we make those assumptions testable -- and trustworthy.**
+   **Without validation, we’re building science conclusions on untested assumptions. With validation, we make those assumptions testable and trustworthy.**
 
-|
+| 
+
+**Impact**
+
+Through access to a state-of-the-art validation framework, the UKSRC science community -- and the global community more broadly -- will be best positioned to maximise the scientific return from SKA data
+(see :ref:`How Stakeholders Benefit <stakeholder-benefit-label>`).
+
+By leading the development of these frameworks, UKSRC fosters local expertise and capability in a key element of precision astrophysics and cosmology pipelines, strengthening the UK’s contribution to global SKA science.
+
+| 
 
 🧪 3. Types of Validation We Perform
 ====================================
 
 Validation within the Science Validation Tooling (UKSRC-ST) team is structured across **multiple layers** of the analysis pipeline, from individual components to end-to-end science inferences. This layered approach ensures that each part of the system -- and their interactions -- are tested for reliability, accuracy, and scientific credibility.
 
-|
+| 
 
 --------------
 
@@ -140,11 +185,17 @@ We perform controlled, unit-style validation on individual simulation and modell
 
 **Examples:**
 
--  Testing ``pyuvsim`` and ``fftvis`` against known visibility solutions (e.g. point sources, Gaussian beams)
+- Testing ``pyuvsim`` and ``Oscar`` against known visibility solutions (e.g. point sources, Gaussian beams).
 
--  Verifying beam model perturbations produce expected changes in effective FWHM
+  - `STV-SDS-001: Telescope Simulation - Basic Validation <https://confluence.skatelescope.org/display/SRCSC/STV-SDS-001%3A+Telescope+Simulation+-+Basic+Validation>`__
 
--  Cross-checks between ``OSKAR``, ``pyuvsim``, and ``matvis`` for sky model consistency
+- Verifying beam model perturbations produce expected changes in effective FWHM
+
+  - `SAPP-161: STV-QADS-004: Documentation and Knowledge Transfer <https://confluence.skatelescope.org/display/SRCSC/SAPP-161%3A+STV-QADS-004%3A+Documentation+and+Knowledge+Transfer>`__
+
+- Cross-checks between ``pyuvsim``, ``OSKAR`` and ``fftvis`` for sky model consistency
+
+  - `STV-SDS-001: Telescope Simulation - Basic Validation <https://confluence.skatelescope.org/display/SRCSC/STV-SDS-001%3A+Telescope+Simulation+-+Basic+Validation>`__
 
 --------------
 
@@ -157,11 +208,11 @@ End-to-end tests allow us to measure the overall performance of the pipeline und
 
 **Examples:**
 
--  Injecting a known 21-cm signal into a realistic HERA simulation and checking whether it is recovered
+- Injecting a known 21-cm signal into a realistic HERA simulation and checking whether it is recovered
 
--  Measuring signal loss, bias, or foreground leakage across the pipeline
+- Measuring signal loss, bias, or foreground leakage across the pipeline
 
--  Comparing different calibration schemes to assess robustness of power spectrum estimates
+- Comparing different calibration schemes to assess robustness of power spectrum estimates
 
 This approach was central to the **HERA Phase I validation** effort (`Aguirre+2022 <https://arxiv.org/abs/2104.09547>`__), which uncovered subtle scale-independent signal loss and informed the development of a robust analysis framework.
 
@@ -204,7 +255,7 @@ BaNTER provides a **model validation prior**, which is then used to weight model
 📈 Summary Table
 ~~~~~~~~~~~~~~~~
 
-|
+| 
 
 +-------------------------------+----------------------------------------------+----------------------------------------------+
 | **Type of Validation**        | **Goal**                                     | **Tools**                                    |
@@ -220,10 +271,10 @@ BaNTER provides a **model validation prior**, which is then used to weight model
 
 --------------
 
-|
+| 
 
-🛠️ 4. Our Approach
-==================
+🛠️ 4. UKSRC Approach
+====================
 
 Our validation strategy is **modular, layered, and Bayesian**. It combines domain-specific simulation tools with statistical rigor to build stakeholder confidence in the reliability of our science pipelines.
 
@@ -234,11 +285,11 @@ We validate individual components -- such as simulators, sky models, and instrum
 
 **Benefits:**
 
--  Easier to identify the source of bugs or biases
+- Easier to identify the source of bugs or biases
 
--  Encourages reuse and reproducibility
+- Encourages reuse and reproducibility
 
--  Scales to increasingly complex science cases
+- Scales to increasingly complex science cases
 
 --------------
 
@@ -251,11 +302,11 @@ We simulate full observing scenarios using realistic sky models, beam models, ar
 
 Key tools:
 
--  ``pyuvsim``, ``fftvis``, ``OSKAR`` (for visibility simulation)
+- ``pyuvsim``, ``fftvis``, ``OSKAR`` (for visibility simulation)
 
--  ``BayesEoR``, ``PolyChord`` (for Bayesian inference)
+- ``BayesEoR``, ``PolyChord`` (for Bayesian inference)
 
--  Custom parameter sweep + perturbation frameworks (e.g. beam FWHM studies)
+- Custom parameter sweep + perturbation frameworks (e.g. beam FWHM studies)
 
 --------------
 
@@ -264,33 +315,32 @@ Key tools:
 
 Rather than relying on visual inspection or point estimates, we use **Bayesian inference** to:
 
--  Quantify parameter uncertainties
+- Quantify parameter uncertainties
 
--  Compare competing models via evidence
+- Compare competing models via evidence
 
--  Identify risk of bias due to model mis-specification (e.g. foreground leakage, calibration errors)
+- Identify risk of bias due to model mis-specification (e.g. foreground leakage, calibration errors)
 
 We extend this with the **BaNTER** framework, which allows us to validate models on signal-free data *before* using them for inference.
 
 --------------
 
 💻 Our Infrastructure
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~                
 
 Validation requires reproducibility, scalability, and traceability. We use a modern, science-friendly stack:
 
-+-----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| **Component**                     | **Details**                                                                                                                             |
-+===================================+=========================================================================================================================================+
-| **Computing**                     | HPC access via **Azimuth** and **Galahad** (incl. CPU and GPU nodes for accelerated computation)                                        |
-+-----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| **Versioning**                    | All validation code tracked in UKSRC GitHub repos                                                                                       |
-|                                   | (e.g. the ``ValSKA`` repository)                                                                                                        |
-+-----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| **Workflow**                      | Notebooks for exploratory work, containers (Docker/Singularity) for reproducibility                                                     |
-+-----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| **Agile Tracking**                | Work organized via JIRA Epics and Stories                                                                                               |
-+-----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
++-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Component**                     | **Details**                                                                                                                                             |
++===================================+=========================================================================================================================================================+
+| **Computing**                     | HPC access via **Azimuth** and **Galahad** (incl. CPU and GPU nodes for accelerated computation)                                                        |
++-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Versioning**                    | All validation code tracked in UKSRC GitHub repos (e.g. `ValSKA-HERA-beam-FWHM <https://github.com/uksrc/ValSKA-HERA-beam-FWHM>`__)                     |
++-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Workflow**                      | Notebooks for exploratory work, containers (Docker/Singularity) for reproducibility                                                                     |
++-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Agile Tracking**                | Work organized via JIRA Epics and Stories Work organized via JIRA Epics and Stories (e.g. `SAPP-146 <https://jira.skatelescope.org/browse/SAPP-146>`__) |
++-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 --------------
 
@@ -299,11 +349,11 @@ Validation requires reproducibility, scalability, and traceability. We use a mod
 
 We design validation activities to be **iterative**:
 
--  Early-stage simulations help set science and calibration requirements
+- Early-stage simulations help set science and calibration requirements
 
--  Mid-stage validations feed into model refinement
+- Mid-stage validations feed into model refinement
 
--  Final-stage validations provide confidence before release of science results
+- Final-stage validations provide confidence before release of science results
 
 Feedback loops with instrument teams, sky model developers, and domain scientists are key to this approach.
 
@@ -314,19 +364,59 @@ Feedback loops with instrument teams, sky model developers, and domain scientist
 
    Each analysis we validate goes through a tailored process:
 
-   -  We define the **signal of interest**
+   - We define the **signal of interest**
 
-   -  Identify the relevant **nuisance models** (e.g. beam, FG, calibration)
+   - Identify the relevant **nuisance models** (e.g. beam, FG, calibration)
 
-   -  Build a suite of **simulations**
+   - Build a suite of **simulations**
 
-   -  Validate individual components and the pipeline as a whole
+   - Validate individual components and the pipeline as a whole
 
-   -  Apply Bayesian model comparison and BaNTER
+   - Apply Bayesian model comparison and BaNTER
 
-   -  Document performance, signal loss, and bias
+   - Document performance, signal loss, and bias
 
 This structured process ensures **science credibility is not left to chance.**
+
+
+| 
+
+🌍 **Making Validation Accessible to the Community**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Transparency and community reusability are core principles of our validation approach. Our goal is to ensure that every stage of testing — from component-level checks to full end-to-end studies — can be inspected, reproduced, or extended by others within the SKA Regional Centre Network and the wider scientific community.
+
+**Current Pathways**
+^^^^^^^^^^^^^^^^^^^^
+
+- | **Public GitHub Repositories:**
+  | Validation workflows, code, and analysis notebooks are made available through the `UKSRC GitHub organisation <https://github.com/uksrc>`__.
+  | These repositories include modular validation packages (e.g. `ValSKA-HERA-beam-FWHM <https://github.com/uksrc/ValSKA-HERA-beam-FWHM>`__) that can be reused or adapted for related studies.
+
+**Planned Enhancements**
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+- | **Open Datasets and Artifacts:**
+  | Simulated datasets and key software artifacts will be archived in public repositories such as **Zenodo**, ensuring long-term availability and DOI-based citation.
+
+- | **FAIR Principles:**
+  | Validation data products will be developed in line with FAIR data principles — *Findable, Accessible, Interoperable, and Reusable*.
+
+- | **Published Studies:**
+  | Results from mature validation campaigns will be considered for submission to the **peer-reviewed literature**, providing formal provenance and wider visibility across the global community.
+
+**Future Directions**
+^^^^^^^^^^^^^^^^^^^^^
+
+- | **Collaborative Validation Campaigns:**
+  | We aim to coordinate shared validation exercises across SKA Science Data Challenge data sets to test interoperability of tools and pipelines.
+
+- | **Documentation and Training:**
+  | Tutorials and “getting started” notebooks will help external users explore, reproduce and extend validation tests.
+
+..
+
+   **In short:** making validation open and reusable strengthens trust, fosters collaboration, and maximises the scientific value of our work.
 
 |
 
@@ -341,7 +431,7 @@ Validation uses a specific vocabulary to describe how we assess the credibility 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 | The specific astrophysical signal we are trying to detect or constrain.
-| In our context, this is often the **21-cm signal** from the Epoch of Reionization or Cosmic Dawn.
+| In the context of the first `ValSKA pipeline <https://github.com/uksrc/ValSKA-HERA-beam-FWHM>`__, exploring HERA beam-modelling uncertainties, this is the **21-cm signal** from the Epoch of Reionization or Cosmic Dawn.
 
    Everything in the validation process is designed to ensure that our measurement of the SOI is **accurate, unbiased, and robust**.
 
@@ -352,13 +442,13 @@ Validation uses a specific vocabulary to describe how we assess the credibility 
 
 A model that describes **multiple components** in the data, such as:
 
--  the SOI
+- the SOI
 
--  astrophysical foregrounds
+- astrophysical foregrounds
 
--  instrumental effects
+- instrumental effects
 
--  noise
+- noise
 
 Example:
 
@@ -368,22 +458,24 @@ Composite models are required for realism -- but they can **hide biases** if com
 
 --------------
 
-🔎 **Predictivity vs. Accuracy**
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+🔎 **Predictivity vs. Aggregate Accuracy vs Physical Accuracy**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-|
+| 
 
-+------------------+-----------------------------------------------------------------------------+
-| Term             | Definition                                                                  |
-+==================+=============================================================================+
-| **Predictivity** | How well a model fits the data overall (i.e. total evidence)                |
-+------------------+-----------------------------------------------------------------------------+
-| **Accuracy**     | Whether individual components of the model correctly describe their signals |
-+------------------+-----------------------------------------------------------------------------+
++------------------------+-----------------------------------------------------------------------------+
+| Term                   | Definition                                                                  |
++========================+=============================================================================+
+| **Predictivity**       | How well a model fits the data overall (i.e. total evidence)                |
++------------------------+-----------------------------------------------------------------------------+
+| **Aggregate Accuracy** | How close the aggregate fit of the model is to the data                     |
++------------------------+-----------------------------------------------------------------------------+
+| **Physical Accuracy**  | Whether individual components of the model correctly describe their signals |
++------------------------+-----------------------------------------------------------------------------+
 
 ..
 
-   A model can be **predictive but not physically accurate** -- fitting the data well but getting the SOI wrong due to unmodelled systematics.
+   A model can be **predictive and accurately describe the data in aggregate while not being physically accurate** -- fitting the data well but getting the SOI wrong due to the SOI model absorbing systematics.
 
 --------------
 
@@ -391,11 +483,11 @@ Composite models are required for realism -- but they can **hide biases** if com
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 | Bayesian evidence quantifies how well a model fits the data *on average* over its parameter space.
-| The **Bayes factor** compares the evidence of two models:
+| The **Bayes factor**, B\ :sub:`AB`\, compares the evidence of two models:
 
--  Value >1: model A preferred
+- B\ :sub:`AB`\ > 1: model A preferred
 
--  Value <1: model B preferred
+- B\ :sub:`AB`\ < 1: model B preferred
 
 Bayes factors are used in **Bayesian model comparison** (BFBMC), but this alone doesn’t guarantee accurate SOI recovery (see next concept).
 
@@ -406,9 +498,9 @@ Bayes factors are used in **Bayesian model comparison** (BFBMC), but this alone 
 
 Bayesian model comparison can mislead if:
 
--  A model fits the data well **in aggregate**
+- A model fits the data well **in aggregate**
 
--  But does so by misattributing signal between components
+- But does so by misattributing signal between components
 
 This is particularly dangerous when the SOI is **sub-dominant** (e.g. buried beneath foregrounds).
 
@@ -438,30 +530,43 @@ It works by:
 
 This combines:
 
--  **Bayes factor** (a posteriori evidence from real data)
+- **Bayes factor** (a posteriori evidence from real data)
 
--  **BaNTER null test** (a priori model credibility)
+- **BaNTER null test** (a priori model credibility)
 
 Result: a robust, **bias-aware model selection criterion**, improving confidence in the final inference.
 
 --------------
 
-**Validation Workflow**
-~~~~~~~~~~~~~~~~~~~~~~~
+**Bayesian Validation Workflow**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-|
+..  figure:: ./_Images/BaNTER_schematic.png
+    :alt: Bayesian Validation Workflow
 
-The diagram highlights three main stages -- **model specification**, **model validation**, and **data analysis** -- and distinguishes between a standard unvalidated Bayesian inference workflow (dashed red lines) and the enhanced BaNTER-validated approach (solid black lines). This formalises the process of introducing prior credibility assessments before posterior model comparison, improving robustness of signal inference. *(Figure credit:* `Sims+2025 <https://arxiv.org/abs/2502.14029>`__\ *)*
+This flowchart highlights three main stages of a validated Bayesian analysis workflow -- **model specification**, **model validation**, and **data analysis**. Additionally, it distinguishes between a standard unvalidated Bayesian inference workflow (dashed red lines) and the enhanced BaNTER-validated approach (solid black lines). This formalises the process of introducing prior credibility assessments before posterior model comparison, improving robustness of signal inference. *(Figure credit:* `Sims+2025 <https://arxiv.org/abs/2502.14029>`__\ *)*
 
-|
+| 
+
+--------------
+
+**Other Validation Workflows**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Detecting and Correcting for Signal Loss
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+..  figure:: ./_Images/HERA_schematic.png
+    :alt: HERA Validation Workflow
+
+This flowchart shows a schematic representation of the HERA validation pipeline. Simulation and analysis flow from left to right, and top to bottom where applicable, as indicated by the black arrows. Broadly, the output of the **Input Data** step is sky and beam models in image space, which are then input to the **Visibility Simulation** step, which produces mock visibilities, spanning 24 hr of LST and the full frequency coverage of the instrument. At the **Systematic Simulation** step, these visibilities are transformed into the actual time sampling of the HERA observations over multiple days, downselected to the observed LST range, and have multiplicative and additive systematic and instrument effects applied. The input to the **Analysis Pipeline** step is then equivalent in format to the raw observed data, and the processing proceeds as if the simulated data were real, including using the same configuration parameters (e.g., smoothing scales and in-painting tolerances). At the **PSpec Pipeline** stage, further averaging and data selection occur before the estimation of the power spectrum in selected frequency (redshift) bands and LST ranges. (Figure credit: `Aguirre+2022 <https://arxiv.org/abs/2104.09547>`__)
 
 --------------
 
 These concepts form the **intellectual backbone** of our validation framework -- combining physical realism, statistical rigour, and practical insight to support trustworthy SKA science.
 
-|
+| 
 
-|
 
 🧰 6. Tools We Use
 ==================
@@ -506,11 +611,11 @@ These are used to fit models to simulated (or real) data, and evaluate the evide
 
 These tools enable us to perform:
 
--  Posterior estimation
+- Posterior estimation
 
--  Model comparison
+- Model comparison
 
--  Validation via posterior odds
+- Validation via posterior odds
 
 --------------
 
@@ -519,14 +624,14 @@ These tools enable us to perform:
 
 Science recovery requires knowledge of the instrument. This knowledge is necessarily incomplete (e.g. element patterns and signal chain characterised to x% and y% accuracy, with x and y < 100). Thus, the question naturally arises: is our knowledge sufficient for precision cosmology? To answer this, we can test sensitivity to systematic uncertainties by perturbing model components:
 
--  | **Beam FWHM perturbation framework**
-   | (e.g. ``ValSKA`` GitHub repo)
+- | **Beam FWHM perturbation framework**
+  | (e.g. ``ValSKA-HERA-beam-FWHM`` GitHub repo)
 
--  **Instrument layout variation**
+- **Instrument layout variation**
 
--  **Foreground modelling variations**
+- **Foreground modelling variations**
 
--  **Sky model incompleteness tests**
+- **Sky model incompleteness tests**
 
 These are used to probe how errors in inputs propagate to science outputs -- and what level of precision is required to keep them under control.
 
@@ -534,8 +639,6 @@ These are used to probe how errors in inputs propagate to science outputs -- and
 
 🌐 **Infrastructure**
 ~~~~~~~~~~~~~~~~~~~~~
-
-|
 
 ============ ==========================================================
 **Platform** **Purpose**
@@ -550,8 +653,6 @@ We use Singularity and Docker containers for **reproducible software environment
 
 🗃️ **Version Control and Collaboration**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-|
 
 +----------------+---------------------------------------------------------------------+
 | **System**     | **Use**                                                             |
@@ -571,9 +672,10 @@ We use Singularity and Docker containers for **reproducible software environment
 
 This toolset is **modular, extensible, and FAIR-aligned**, allowing us to scale from tightly controlled validation cases to complex, high-dimensional SKA use cases.
 
-|
+| 
 
-|
+
+.. _stakeholder-benefit-label:
 
 🤝 7. How Stakeholders Benefit
 ==============================
@@ -587,39 +689,48 @@ Here’s how validation supports different stakeholder groups:
 🔬 For Science Leads and Analysts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Confidence in Results**
-   | Know that reported detections or upper limits are statistically sound, not artefacts of systematics.
+- | **Confidence in Results**
+  | Know that reported detections or upper limits are statistically sound, not artefacts of systematics.
 
--  | **Model Selection with Rigor**
-   | Use validated posterior odds to compare competing theories or astrophysical models.
+- | **Model Selection with Rigor**
+  | Use validated posterior odds to compare competing theories or astrophysical models.
 
--  | **Targeted Model Refinement**
-   | Identify where modelling effort is most needed (e.g. better beams vs. better sky models).
+- | **Targeted Model Refinement**
+  | Identify where modelling effort is most needed (e.g. better beams vs. better sky models).
 
 --------------
 
 🛠️ For Instrumentation and Calibration Teams
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Requirements Derivation**
-   | Quantify how precisely components (e.g. beam FWHM, antenna layout) must be known to support specific science goals.
+- | **Requirements Derivation**
+  | Quantify how precisely components (e.g. beam FWHM, antenna layout) must be known to support specific science goals.
 
--  | **Feedback Loops**
-   | Understand how instrument choices affect scientific accuracy, even before deployment.
+- | **Feedback Loops**
+  | Understand how instrument choices affect scientific accuracy, even before deployment.
 
 --------------
 
 💼 For Programme Managers and Funders
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Risk Reduction**
-   | Validation reduces the risk of costly reanalysis, spurious claims, or retraction of results.
+- | **Risk Reduction**
+  | Validation reduces the risk of costly reanalysis, spurious claims, or retraction of results.
 
--  | **Investment Prioritisation**
-   | Enables data-driven decisions on where to focus calibration, simulation, or modelling efforts.
+- | **Investment Prioritisation**
+  | Enables data-driven decisions on where to focus calibration, simulation, or modelling efforts.
 
--  | **Impact Tracking**
-   | Provides evidence of progress toward precision cosmology readiness -- key for reporting and review cycles.
+- | **Impact Tracking**
+  | Provides evidence of progress toward precision cosmology readiness -- key for reporting and review cycles.
+
+--------------
+
+**Accessing Our Validation Outputs**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We aim to make all validation results, datasets, and tools openly available through the `UKSRC GitHub organisation <https://github.com/uksrc>`__ and, where appropriate, via the UKSRC website and Zenodo, in line with FAIR principles.
+
+Further details on how our validation work is shared with the wider community are outlined in `Making Validation Accessible to the Community <https://confluence.skatelescope.org/display/SRCSC/Validation+Primer#ValidationPrimer-%F0%9F%8C%8DMakingValidationAccessibletotheCommunity>`__ (Section 4).
 
 --------------
 
@@ -628,19 +739,19 @@ Here’s how validation supports different stakeholder groups:
 
 Why This Matters to Stakeholders
 
--  Validation builds trust in science outputs before real data even arrives
--  It provides quantitative answers to questions like:
-   “Is our beam model good enough?” or “What’s the risk of false detection?”
--  Helps prioritise which instrument parameters or modelling choices matter most
--  Makes UKSRC science contributions more credible and internationally competitive
+- Validation builds trust in science outputs before real data even arrives
+- It provides quantitative answers to questions like:
+  “Is our beam model good enough?” or “What’s the risk of false detection?”
+- Helps prioritise which instrument parameters or modelling choices matter most
+- Makes UKSRC science contributions more credible and internationally competitive
 
-|
+| 
 
 --------------
 
    ✅ **In short**: Validation turns “we hope this works” into “we have evidence that it does.”
 
-|
+| 
 
 🔭 8. Looking Ahead
 ===================
@@ -652,53 +763,53 @@ Validation is not a one-off task -- it is a continuous process that evolves alon
 📈 Scaling to SKA-Class Complexity
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Bigger Simulations**
-   | We are expanding to simulate full SKA-class observations, with thousands of antennas and high-resolution sky models.
+- | **Bigger Simulations**
+  | We are expanding to simulate full SKA-class observations, with thousands of antennas and high-resolution sky models.
 
--  | **More Science Cases**
-   | After establishing pipelines for 21-cm cosmology, we aim to extend validation to other domains such as pulsar timing, continuum imaging, and intensity mapping.
+- | **More Science Cases**
+  | After establishing pipelines for 21-cm cosmology, we aim to extend validation to other domains such as pulsar timing, continuum imaging, and intensity mapping.
 
--  | **Cross-Validation Across Tools**
-   | Ongoing efforts to compare outputs across multiple simulators (e.g. ``pyuvsim``, ``fftvis``, ``OSKAR``) will help identify hidden assumptions and strengthen robustness.
+- | **Cross-Validation Across Tools**
+  | Ongoing efforts to compare outputs across multiple simulators (e.g. ``pyuvsim``, ``fftvis``, ``OSKAR``) will help identify hidden assumptions and strengthen robustness.
 
 --------------
 
 ⚙️ Automation and Reproducibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **FAIR-Aligned Pipelines**
-   | We’re building validation workflows that are Findable, Accessible, Interoperable, and Reproducible.
+- | **FAIR-Aligned Pipelines**
+  | We’re building validation workflows that are Findable, Accessible, Interoperable, and Reproducible.
 
--  | **CI/CD for Science**
-   | Moving toward containerized, automated validation tests that run as part of our development cycle.
+- | **CI/CD for Science**
+  | Moving toward containerized, automated validation tests that run as part of our development cycle.
 
--  | **Traceable Deliverables**
-   | Versioned validation reports will allow stakeholders to track performance over time.
+- | **Traceable Deliverables**
+  | Versioned validation reports will allow stakeholders to track performance over time.
 
 --------------
 
 🧠 Deeper Integration with Inference
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Validated Posterior Odds**
-   | Future analyses can directly incorporate model credibility (via BaNTER) into parameter estimation.
+- | **Validated Posterior Odds**
+  | Future analyses can directly incorporate model credibility (via BaNTER) into parameter estimation.
 
--  | **Uncertainty-Aware Decision Making**
-   | Helping scientists and instrument teams understand not just *what* a result is, but *how reliable* it is -- and *why*.
+- | **Uncertainty-Aware Decision Making**
+  | Helping scientists and instrument teams understand not just *what* a result is, but *how reliable* it is -- and *why*.
 
 --------------
 
 👥 Strengthening Stakeholder Engagement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  | **Transparent Reporting**
-   | We’ll continue to publish validation results, failure modes, and assumptions clearly and accessibly.
+- | **Transparent Reporting**
+  | We’ll continue to publish validation results, failure modes, and assumptions clearly and accessibly.
 
--  | **Collaborative Requirements Setting**
-   | Validation outputs should inform calibration requirements, observing strategies, and data processing plans.
+- | **Collaborative Requirements Setting**
+  | Validation outputs should inform calibration requirements, observing strategies, and data processing plans.
 
--  | **Training and Onboarding Support**
-   | Materials and tutorials will help new team members, scientists, and partners understand and contribute to validation efforts.
+- | **Training and Onboarding Support**
+  | Materials and tutorials will help new team members, scientists, and partners understand and contribute to validation efforts.
 
 --------------
 
@@ -706,24 +817,24 @@ Validation is not a one-off task -- it is a continuous process that evolves alon
 
 By investing in rigorous, scalable validation now, we’re laying the foundation for **credible, world-leading science** with SKA and its pathfinders.
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
 
-|
+| 
