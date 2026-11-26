@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests.utils import mock_read_chains
 from valska.external_tools.bayeseor import cli_report, evidence
 from valska.external_tools.bayeseor.report import (
     _plot_config_for_hypothesis,
@@ -18,8 +19,6 @@ from valska.external_tools.bayeseor.report import (
 from valska.external_tools.bayeseor.valska_bayeseor_plotting import (
     BayesEoRPlotConfig,
 )
-
-from .constants import mock_read_chains
 
 
 def _write_data_stats(

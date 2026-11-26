@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.utils import mock_read_chains
 from valska.external_tools.bayeseor import evidence
-
-from .constants import mock_read_chains
 
 
 @pytest.mark.parametrize(

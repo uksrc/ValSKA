@@ -7,9 +7,8 @@ import numpy
 import pytest
 from astropy.coordinates import Angle
 
+from tests.utils import make_airy_data, make_gaussian_data
 from valska import beam_metrics
-
-from .constants import make_airy_data, make_gaussian_data
 
 CONFIG_TEXT = (
     "beam_paths:\n"
