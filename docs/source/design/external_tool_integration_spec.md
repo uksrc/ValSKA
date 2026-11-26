@@ -25,6 +25,8 @@ This specification covers **required** behaviours for all external tools, plus *
 
 It does not prescribe internal implementation details — tools may organise their code as appropriate, provided they satisfy the external contract defined here.
 
+Note that tool integrations may use the shared infrastructure located under `valska.external_tools.common` but should preserve the externally visible behaviour defined by this specification.
+
 ### 1.3 Definitions
 
 | Term | Definition |

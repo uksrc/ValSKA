@@ -1,8 +1,8 @@
 # Tool Implementer's Guide
 
-**Version:** 1.0.0-draft
+**Version:** 1.1.0-draft
 **Status:** Draft
-**Last updated:** 2026-01-21
+**Last updated:** 2026-11-26
 
 ---
 
@@ -97,23 +97,38 @@ touch src/valska/external_tools/pyuvsim/cli_submit.py
 touch src/valska/external_tools/pyuvsim/setup.py
 touch src/valska/external_tools/pyuvsim/submit.py
 touch src/valska/external_tools/pyuvsim/runner.py
-touch src/valska/external_tools/pyuvsim/slurm.py
 touch src/valska/external_tools/pyuvsim/templates.py
 ```
 
-### 3.2 File responsibilities
+Most new tools should reuse the shared infrastructure in:
+- `valska.external_tools.common.runner`
+- `valska.external_tools.common.slurm`
+- `valska.external_tools.common.submit`
+
+and therefore do not normally require a tool-specific `slurm.py`. Create a tool-specific 
+`slurm.py` only if the shared Slurm rendering framework cannot support a genuinely 
+tool-specific requirement.
+
+#### 3.2 File responsibilities
 
 | File | Responsibility |
-|------|----------------|
+|--------|--------|
 | `__init__.py` | Public API exports |
-| `cli_prepare.py` | CLI entry point for `valska-pyuvsim-prepare` |
-| `cli_submit.py` | CLI entry point for `valska-pyuvsim-submit` |
-| `setup.py` | Core prepare logic (run directory creation, manifest writing) |
-| `submit.py` | Core submit logic (SLURM interaction, jobs.json writing) |
-| `runner.py` | Runner class definitions (CondaRunner, ContainerRunner) |
-| `slurm.py` | SLURM submit script generation |
+| `cli_prepare.py` | CLI entry point for `valska-<tool>-prepare` |
+| `cli_submit.py` | CLI entry point for `valska-<tool>-submit` |
+| `setup.py` | Run preparation, configuration generation, command generation and manifest creation |
+| `submit.py` | Tool-specific submission plan, workflow stages and submission options |
+| `runner.py` | Optional tool-specific installation metadata extending the shared runner framework |
 | `templates.py` | Template discovery and loading utilities |
 | `templates/` | Shipped configuration templates |
+
+The following infrastructure is shared across tools:
+
+| Module | Responsibility |
+|----------|----------|
+| `common.runner` | Shared runner abstractions (`ToolInstall`, `CondaRunner`, `ContainerRunner`) |
+| `common.slurm` | Shared Slurm rendering |
+| `common.submit` | Shared submission orchestration, jobs.json handling and history tracking |
 
 ### 3.3 Register entry points
 
@@ -383,144 +398,76 @@ def write_manifest(
 
 ### 4.6 Generating SLURM submit scripts
 
-Create the submit script generator:
+#### 4.6 Generating SLURM submit scripts
+
+Most tools should use the shared Slurm renderer provided by:
 
 ```python
-# filepath: src/valska/external_tools/pyuvsim/slurm.py
-
-from pathlib import Path
-from typing import Any
-
-from .runner import CondaRunner, ContainerRunner
-
-def render_submit_script(
-    *,
-    runner: CondaRunner | ContainerRunner,
-    config_yaml: Path,
-    run_dir: Path,
-    slurm: dict[str, Any],
-) -> str:
-    """
-    Render a SLURM submit script for pyuvsim.
-
-    Parameters
-    ----------
-    runner
-        Execution environment (conda or container).
-    config_yaml
-        Path to pyuvsim configuration file.
-    run_dir
-        Run directory for outputs and logs.
-    slurm
-        SLURM directives. Keys set to None are omitted.
-    """
-
-    lines = ["#!/bin/bash"]
-
-    # Job name
-    job_name = slurm.get("job_name") or f"pyuvsim_{run_dir.name}"
-    lines.append(f"#SBATCH --job-name={job_name}")
-
-    # Output logs
-    output = slurm.get("output") or run_dir / "slurm-%j.out"
-    lines.append(f"#SBATCH --output={output}")
-
-    # Resource directives (only emit if not None)
-    directive_map = {
-        "partition": "--partition",
-        "constraint": "--constraint",
-        "qos": "--qos",
-        "account": "--account",
-        "time": "--time",
-        "mem": "--mem",
-        "nodes": "--nodes",
-        "ntasks": "--ntasks",
-        "cpus_per_task": "--cpus-per-task",
-    }
-
-    for key, directive in directive_map.items():
-        value = slurm.get(key)
-        if value is not None:
-            lines.append(f"#SBATCH {directive}={value}")
-
-    # Extra directives
-    for extra in slurm.get("extra_sbatch", []):
-        lines.append(f"#SBATCH {extra}")
-
-    lines.append("")
-    lines.append("set -euo pipefail")
-    lines.append("")
-
-    # Diagnostic output
-    lines.append("echo '=== Job Information ==='")
-    lines.append("echo \"Job ID: $SLURM_JOB_ID\"")
-    lines.append("echo \"Node: $(hostname)\"")
-    lines.append(f"echo \"Run directory: {run_dir}\"")
-    lines.append(f"echo \"Config: {config_yaml}\"")
-    lines.append("echo \"Start time: $(date -u +'%Y-%m-%dT%H:%M:%SZ')\"")
-    lines.append("echo")
-    lines.append("")
-
-    # Environment setup
-    if isinstance(runner, CondaRunner):
-        lines.append("# Activate conda environment")
-        lines.append(runner.conda_sh)
-        lines.append(f"conda activate {runner.conda_env}")
-        lines.append("")
-
-        # Execution command
-        lines.append("# Run pyuvsim")
-        lines.append(f"cd {run_dir}")
-        lines.append(f"python -m pyuvsim.uvsim {config_yaml}")
-
-    elif isinstance(runner, ContainerRunner):
-        lines.append("# Run via container")
-        bind_opts = f"--bind {runner.container_bind}" if runner.container_bind else ""
-        lines.append(
-            f"apptainer exec {bind_opts} {runner.container_image} "
-            f"python -m pyuvsim.uvsim {config_yaml}"
-        )
-
-    lines.append("")
-    lines.append("echo")
-    lines.append("echo \"End time: $(date -u +'%Y-%m-%dT%H:%M:%SZ')\"")
-    lines.append("echo '=== Job Complete ==='")
-
-    return "\n".join(lines)
+valska.external_tools.common.slurm
 ```
+
+The shared renderer handles:
+
+- SBATCH directive generation.
+- Conda activation.
+- Array jobs.
+- Diagnostics logging.
+- Timing files.
+- Command execution wrappers.
+
+Rather than generating Slurm scripts directly, tool integrations should focus on generating the commands that need to be executed.
+
+For example:
+
+```python
+commands = prepare_mytool_commands(...)
+```
+
+The shared renderer then embeds these commands within a standardised Slurm script.
+
+Tools should only implement their own Slurm renderer if they require behaviour that cannot reasonably be represented using the shared framework.
+
+As a rule:
+
+- Tools generate commands.
+- The shared framework generates Slurm scripts.
+
 
 ### 4.7 Runner definitions
 
-Define your runner classes:
+#### 4.7 Runner definitions
+
+Most tools should reuse the shared runner abstractions provided by:
 
 ```python
-# filepath: src/valska/external_tools/pyuvsim/runner.py
+from valska.external_tools.common.runner import (
+    ToolInstall,
+    CondaRunner,
+    ContainerRunner,
+)
+```
 
+`CondaRunner` and `ContainerRunner` provide common execution environments that can be shared across multiple tools.
+
+Tool-specific runner modules should normally only define installation metadata.
+
+For example:
+
+```python
 from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class CondaRunner:
-    """Execute pyuvsim within a conda environment."""
-
-    conda_sh: str
-    """Command to source conda (e.g., 'source /path/to/conda.sh')."""
-
-    conda_env: str
-    """Name of the conda environment."""
+from valska.external_tools.common.runner import ToolInstall
 
 
 @dataclass(frozen=True)
-class ContainerRunner:
-    """Execute pyuvsim within an Apptainer/Singularity container."""
-
-    container_image: Path
-    """Path to the container image (.sif file)."""
-
-    container_bind: str | None = None
-    """Bind mount specification (e.g., '/data:/data,/scratch:/scratch')."""
+class MyToolInstall(ToolInstall):
+    run_script: Path
 ```
+
+This pattern is used by BayesEoR, which extends `ToolInstall` while reusing the shared runner implementations unchanged.
+
+Avoid creating tool-specific copies of `CondaRunner` or `ContainerRunner` unless genuinely new execution behaviour is required.
 
 ### 4.8 Main prepare function
 
@@ -723,252 +670,207 @@ if __name__ == "__main__":
 
 ## 5. Implementing the submit phase
 
-### 5.1 Overview
+### 5. Implementing the submit phase
+
+#### 5.1 Overview
 
 The submit phase:
 
-1. Validates the run directory exists and is prepared
-2. Reads the manifest
-3. Submits SLURM jobs
-4. Records job IDs in `jobs.json`
+- Validates that the run directory exists and has been prepared.
+- Loads and validates `manifest.json`.
+- Resolves workflow stages.
+- Submits jobs through Slurm.
+- Records submission metadata in `jobs.json`.
+- Tracks submission history.
 
-### 5.2 Core submit logic
+Most of this functionality is now provided by the shared submission framework in:
 
 ```python
-# filepath: src/valska/external_tools/pyuvsim/submit.py
+valska.external_tools.common.submit
+```
 
-from __future__ import annotations
+Tool integrations are responsible for defining stages, dependencies, installation-specific behaviour, and tool-specific submission options.
 
-import json
-import re
-import subprocess
+---
+
+#### 5.2 RunOptions
+
+Tools should define a `RunOptions` subclass whenever additional submission options are required.
+
+Example:
+
+```python
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+
+from valska.external_tools.common.submit import RunOptions
 
 
-class SubmissionError(RuntimeError):
-    """Raised when SLURM submission fails."""
-    pass
-
-
-_JOBID_RE = re.compile(r"Submitted\s+batch\s+job\s+(\d+)", re.IGNORECASE)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def load_manifest(run_dir: Path) -> dict[str, Any]:
-    """Load and validate manifest.json."""
-    manifest_path = run_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise SubmissionError(
-            f"Manifest not found: {manifest_path}\n"
-            f"Hint: Run 'valska-pyuvsim-prepare' first."
-        )
-
-    with manifest_path.open() as f:
-        return json.load(f)
-
-
-def submit_pyuvsim_run(
-    run_dir: Path,
-    *,
-    stage: str = "all",
-    dry_run: bool = False,
-    resubmit: bool = False,
-    sbatch: str = "sbatch",
-) -> dict[str, Any]:
-    """
-    Submit a prepared pyuvsim run to SLURM.
-
-    Parameters
-    ----------
-    run_dir
-        Path to prepared run directory.
-    stage
-        Stage to submit ('simulate' or 'all').
-    dry_run
-        If True, print commands without executing.
-    resubmit
-        If True, archive existing jobs.json before submitting.
-    sbatch
-        Path to sbatch executable.
-
-    Returns
-    -------
-    dict with job submission details.
-    """
-    run_dir = Path(run_dir).resolve()
-
-    # Validate run directory
-    if not run_dir.exists():
-        raise SubmissionError(f"Run directory not found: {run_dir}")
-
-    manifest = load_manifest(run_dir)
-
-    # Handle resubmission
-    jobs_path = run_dir / "jobs.json"
-    if jobs_path.exists() and not resubmit:
-        raise SubmissionError(
-            f"jobs.json already exists: {jobs_path}\n"
-            f"Use --resubmit to archive and resubmit."
-        )
-
-    if jobs_path.exists() and resubmit:
-        archive_path = run_dir / f"jobs_{_utc_now_iso().replace(':', '')}.json"
-        jobs_path.rename(archive_path)
-
-    # Find submit script
-    submit_script = run_dir / "submit_simulate.sh"
-    if not submit_script.exists():
-        raise SubmissionError(f"Submit script not found: {submit_script}")
-
-    # Build submission command
-    cmd = [sbatch, str(submit_script)]
-
-    if dry_run:
-        print(f"[DRY RUN] Would execute: {' '.join(cmd)}")
-        job_id = None
-    else:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=run_dir,
-        )
-
-        if result.returncode != 0:
-            raise SubmissionError(
-                f"sbatch failed with code {result.returncode}:\n{result.stderr}"
-            )
-
-        match = _JOBID_RE.search(result.stdout)
-        if not match:
-            raise SubmissionError(
-                f"Could not parse job ID from sbatch output:\n{result.stdout}"
-            )
-
-        job_id = match.group(1)
-        print(f"Submitted job {job_id}")
-
-    # Write jobs.json
-    jobs_record = {
-        "schema_version": "1.0",
-        "run_dir": str(run_dir),
-        "manifest": str(run_dir / "manifest.json"),
-        "sbatch": sbatch,
-        "dry_run": dry_run,
-        "submitted_utc": _utc_now_iso(),
-        "stage": stage,
-        "jobs": {
-            "simulate": {
-                "job_id": job_id,
-                "script": str(submit_script),
-                "dependency": None,
-            },
-        },
-        "commands": [" ".join(cmd)],
-    }
-
-    if not dry_run:
-        with jobs_path.open("w") as f:
-            json.dump(jobs_record, f, indent=2)
-
-    return jobs_record
+@dataclass
+class MyToolRunOptions(RunOptions):
+    my_option: str = "default"
 ```
 
-### 5.3 Submit CLI
+The shared framework already provides common submission options:
 
 ```python
-# filepath: src/valska/external_tools/pyuvsim/cli_submit.py
-
-#!/usr/bin/env python3
-"""CLI entry point for valska-pyuvsim-submit."""
-
-from __future__ import annotations
-
-import argparse
-import sys
-from pathlib import Path
-
-from .submit import SubmissionError, submit_pyuvsim_run
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="valska-pyuvsim-submit",
-        description="Submit a prepared pyuvsim run to SLURM.",
-    )
-
-    parser.add_argument(
-        "run_dir",
-        type=Path,
-        help="Path to prepared run directory.",
-    )
-
-    parser.add_argument(
-        "--stage",
-        default="all",
-        choices=["simulate", "all"],
-        help="Stage to submit (default: all).",
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print commands without executing.",
-    )
-
-    parser.add_argument(
-        "--resubmit",
-        action="store_true",
-        help="Archive existing jobs.json and resubmit.",
-    )
-
-    parser.add_argument(
-        "--sbatch",
-        default="sbatch",
-        help="Path to sbatch executable.",
-    )
-
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    """Main entry point."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    try:
-        result = submit_pyuvsim_run(
-            run_dir=args.run_dir,
-            stage=args.stage,
-            dry_run=args.dry_run,
-            resubmit=args.resubmit,
-            sbatch=args.sbatch,
-        )
-
-        if args.dry_run:
-            print("\n[DRY RUN] No jobs submitted.")
-        else:
-            print(f"\njobs.json written to: {args.run_dir / 'jobs.json'}")
-
-        return 0
-
-    except SubmissionError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 3 if "not found" in str(e).lower() else 4
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+sbatch_exe
+dry_run
+force
+depend_afterok
+record
 ```
+
+Tool-specific options should be limited to behaviour unique to the tool.
+
+---
+
+#### 5.3 Defining stages
+
+Workflows are represented as collections of stages.
+
+A stage corresponds to an independently submittable workflow component such as:
+
+```text
+simulate
+beamcheck
+cpu_precompute
+signal_fit
+```
+
+Stages are defined using:
+
+```python
+from valska.external_tools.common.submit import Stage
+
+
+SIMULATE = Stage(
+    name="simulate",
+    method=submit_simulate,
+)
+```
+
+Each stage method performs tool-specific submission logic and updates the submission record.
+
+Example:
+
+```python
+def submit_simulate(plan, result):
+    ...
+    return result
+```
+
+Stage methods should:
+
+- Submit jobs.
+- Update job records.
+- Record commands.
+- Return the updated result structure.
+
+The shared framework handles jobs.json persistence, history recording, and common metadata automatically.
+
+---
+
+#### 5.4 Creating a SubmitPlan
+
+Each tool defines a `SubmitPlan` subclass.
+
+The `SubmitPlan` is responsible for:
+
+- Loading manifest information.
+- Resolving artefact locations.
+- Validating existing submissions.
+- Defining available workflow stages.
+- Providing stage-specific context.
+
+Typical structure:
+
+```python
+class MyToolSubmitPlan(
+    SubmitPlan[MyToolRunOptions]
+):
+    ...
+```
+
+Tool-specific plans should focus on workflow semantics rather than generic submission orchestration.
+
+---
+
+#### 5.5 Stage resolution
+
+The `SubmitPlan` determines which stages execute for a given stage selection.
+
+Example:
+
+```python
+{
+    "simulate": [SIMULATE],
+    "all": [SIMULATE, BEAMCHECK],
+}
+```
+
+This allows individual stage submission while preserving explicit workflow ordering.
+
+Stage resolution should be deterministic and testable.
+
+---
+
+#### 5.6 Using the shared submission framework
+
+Submission is normally performed using:
+
+```python
+submit_tool_run(...)
+```
+
+The framework automatically handles:
+
+- Manifest loading.
+- Stage execution.
+- jobs.json generation.
+- Submission history.
+- Dry-run support.
+- Duplicate submission protection.
+- Force resubmission.
+- Dependency handling.
+
+Tool implementations should focus on workflow behaviour rather than submission plumbing.
+
+---
+
+#### 5.7 Submit CLI
+
+The submit CLI remains responsible for:
+
+- Parsing user arguments.
+- Constructing `RunOptions`.
+- Selecting stages.
+- Invoking the tool submission plan.
+
+Typical flow:
+
+```python
+options = MyToolRunOptions(
+    sbatch_exe=args.sbatch,
+    dry_run=args.dry_run,
+)
+
+submit_tool_run(
+    run_dir=args.run_dir,
+    stage_id=args.stage,
+    submit_plan=MyToolSubmitPlan,
+    options=options,
+)
+```
+
+The CLI should not directly implement:
+
+- Submission orchestration.
+- jobs.json handling.
+- History tracking.
+- Stage execution logic.
+
+These responsibilities belong in the shared submission framework.
+
 
 ---
 
@@ -1190,152 +1092,53 @@ __all__ = [
 
 ### 9.1 Required tests
 
-Create tests in `tests/external_tools/pyuvsim/`:
+#### 9.1 Required tests
 
-```python
-# filepath: tests/external_tools/pyuvsim/test_prepare.py
+Create tests in:
 
-import pytest
-from pathlib import Path
-
-from valska.external_tools.pyuvsim import (
-    prepare_pyuvsim_run,
-    CondaRunner,
-)
-
-
-class TestPrepareDryRun:
-    """Test prepare with --dry-run."""
-
-    def test_dry_run_creates_no_files(self, tmp_path):
-        """Verify dry run does not create any files."""
-        results_root = tmp_path / "results"
-
-        result = prepare_pyuvsim_run(
-            run_id="test_001",
-            results_root=results_root,
-            telescope="HERA",
-            observation_id="test",
-            config_path=Path("dummy.yaml"),
-            runner=CondaRunner("source conda.sh", "pyuvsim"),
-            slurm_config={},
-            dry_run=True,
-        )
-
-        assert result["dry_run"] is True
-        assert not results_root.exists()
-
-
-class TestPrepareExecution:
-    """Test actual prepare execution."""
-
-    def test_creates_run_directory(self, tmp_path):
-        """Verify run directory is created with expected contents."""
-        results_root = tmp_path / "results"
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text("test: config")
-
-        result = prepare_pyuvsim_run(
-            run_id="test_001",
-            results_root=results_root,
-            telescope="HERA",
-            observation_id="obs1",
-            config_path=config_file,
-            runner=CondaRunner("source conda.sh", "pyuvsim"),
-            slurm_config={"time": "01:00:00"},
-            dry_run=False,
-        )
-
-        run_dir = result["run_dir"]
-        assert run_dir.exists()
-        assert (run_dir / "manifest.json").exists()
-        assert (run_dir / "submit_simulate.sh").exists()
-        assert (run_dir / "config.yaml").exists()
-
-    def test_manifest_has_required_fields(self, tmp_path):
-        """Verify manifest contains all required fields."""
-        import json
-
-        results_root = tmp_path / "results"
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text("test: config")
-
-        result = prepare_pyuvsim_run(
-            run_id="test_001",
-            results_root=results_root,
-            telescope="HERA",
-            observation_id="obs1",
-            config_path=config_file,
-            runner=CondaRunner("source conda.sh", "pyuvsim"),
-            slurm_config={},
-            dry_run=False,
-        )
-
-        manifest = json.loads(result["manifest"].read_text())
-
-        # Required fields per spec §6.1.3
-        assert manifest["tool"] == "pyuvsim"
-        assert "created_utc" in manifest
-        assert "valska_version" in manifest
-        assert manifest["run_id"] == "test_001"
-        assert "run_dir" in manifest
-        assert "results_root" in manifest
+```text
+tests/external_tools/<tool>/
 ```
 
-### 9.2 Test configuration resolution
+Tool-specific tests should focus on behaviour that is unique to the tool.
 
-```python
-# filepath: tests/external_tools/pyuvsim/test_config.py
+### setup.py
 
-import pytest
+- Configuration generation.
+- Manifest generation.
+- Artefact registration.
+- Command generation.
+- Run-directory creation.
 
-from valska.external_tools.pyuvsim.cli_prepare import (
-    build_slurm_config,
-)
+### submit.py
+
+- Stage definitions.
+- Stage ordering.
+- Dependency handling.
+- Manifest interpretation.
+- Tool-specific options.
+- Tool-specific submission behaviour.
+
+### CLI
+
+- Argument parsing.
+- Configuration resolution.
+- Error handling.
+- Exit codes.
+
+Behaviour provided by shared infrastructure should normally be tested in the common test suites rather than duplicated across every tool.
+
+Examples include:
+
+- jobs.json persistence.
+- Submission history.
+- Duplicate-submission prevention.
+- Dry-run handling.
+- Common Slurm rendering.
+- Common runner behaviour.
 
 
-class TestConfigResolution:
-    """Test configuration hierarchy."""
 
-    def test_cli_overrides_config(self):
-        """CLI arguments take precedence over config file."""
-        tool_config = {
-            "slurm_defaults": {
-                "partition": "default",
-                "time": "04:00:00",
-            }
-        }
-
-        # Simulate CLI args
-        class Args:
-            partition = "override"
-            time = None
-            cpus_per_task = None
-            mem = None
-
-        config = build_slurm_config(tool_config, Args())
-
-        assert config["partition"] == "override"
-        assert config["time"] == "04:00:00"  # from config
-
-    def test_config_overrides_defaults(self):
-        """Config file overrides hardcoded defaults."""
-        tool_config = {
-            "slurm_defaults": {
-                "time": "12:00:00",  # override default 04:00:00
-            }
-        }
-
-        class Args:
-            partition = None
-            time = None
-            cpus_per_task = None
-            mem = None
-
-        config = build_slurm_config(tool_config, Args())
-
-        assert config["time"] == "12:00:00"
-```
 
 ---
 
