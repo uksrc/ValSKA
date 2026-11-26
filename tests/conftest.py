@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.constants import EOR_PS, NOISE_RATIO
 from tests.test_pyuvsim_slurm import _render_script
 from valska.external_tools.bayeseor.bayeseor_direct_plotting import (
     BeamAnalysisPlotter,
 )
+from valska.external_tools.common.runner import CondaRunner
 from valska.utils import PathManager
-
-from .constants import EOR_PS, NOISE_RATIO
 
 
 @pytest.fixture(scope="session")
@@ -89,3 +89,11 @@ def beam_analysis_fixture(chains_dir):
 @pytest.fixture(scope="session")
 def simulate_script():
     return _render_script("simulate")
+
+
+@pytest.fixture(scope="session", name="runner")
+def runner_fixture():
+    return CondaRunner(
+        conda_activate="source /opt/conda/etc/profile.d/conda.sh",
+        env_name="testenv",
+    )

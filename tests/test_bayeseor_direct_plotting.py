@@ -8,14 +8,13 @@ from unittest.mock import patch
 import numpy
 import pytest
 
-from valska.external_tools.bayeseor import bayeseor_direct_plotting
-
-from .constants import (
+from tests.constants import (
     # CHAINS_DIR,
     EOR_PS,
     NOISE_RATIO,
-    MockDataContainer,
 )
+from tests.mocks import MockDataContainer
+from valska.external_tools.bayeseor import bayeseor_direct_plotting
 
 
 def test_create_beam_plotter_with_paths_file(path_manager):
